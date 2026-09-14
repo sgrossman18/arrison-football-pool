@@ -198,7 +198,9 @@ export default function PicksForm({
 
       {error && <div className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</div>}
       {success && (
-        <div className="text-sm text-accent-strong font-medium">Picks saved!</div>
+        <div className="text-sm text-accent-strong font-medium">
+          Picks saved! Feel free to change them again before the deadline.
+        </div>
       )}
 
       {canSubmit && (

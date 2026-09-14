@@ -5,6 +5,7 @@ import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
 import { utcToEasternDatetimeLocal, formatEastern } from "@/lib/timezone";
 import { effectiveLockTime } from "@/lib/locking";
 import WeekIntro from "@/components/WeekIntro";
+import RemindersButton from "@/components/RemindersButton";
 import {
   addGame,
   updateGame,
@@ -80,12 +81,15 @@ export default async function WeekEditorPage({
       {/* Submission status */}
       {totalGames > 0 && allPlayers.length > 0 && (
         <section>
-          <h2 className="text-lg font-bold mb-3">
-            Who&apos;s picked{" "}
-            <span className="text-muted font-medium text-base">
-              ({done.length}/{allPlayers.length})
-            </span>
-          </h2>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h2 className="text-lg font-bold">
+              Who&apos;s picked{" "}
+              <span className="text-muted font-medium text-base">
+                ({done.length}/{allPlayers.length})
+              </span>
+            </h2>
+            {notDone.length > 0 && <RemindersButton weekId={week.id} />}
+          </div>
           <div className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex flex-col gap-2">
             {notDone.length === 0 ? (
               <p className="text-sm text-accent-strong font-medium">

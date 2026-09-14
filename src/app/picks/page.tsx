@@ -68,6 +68,11 @@ export default async function PicksPage({
       ? `Picks locked at ${formatEastern(lockTime)}.`
       : undefined;
 
+  const openDeadlineNote =
+    allowed && !locked && lockTime
+      ? `You can change these picks as many times as you want until ${formatEastern(lockTime)}.`
+      : undefined;
+
   return (
     <div>
       {players.length > 1 && (
@@ -82,6 +87,7 @@ export default async function PicksPage({
         )}
       </h1>
       <WeekIntro markdown={week.introMarkdown} />
+      {openDeadlineNote && <p className="text-sm text-muted mb-4">{openDeadlineNote}</p>}
 
       <PicksForm
         key={activePlayer.id}
