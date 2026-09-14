@@ -153,6 +153,39 @@ export async function setUserAdmin(userId: string, isAdmin: boolean) {
   revalidatePath("/admin/users");
 }
 
+export async function renamePlayer(playerId: string, name: string) {
+  await requireAdmin();
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name can't be empty." };
+  await prisma.player.update({ where: { id: playerId }, data: { name: trimmed } });
+  revalidatePath("/admin/users");
+  revalidatePath("/picks");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  return { ok: true };
+}
+
+// Deleting a player cascades their picks and lock overrides everywhere
+// (schema-level onDelete: Cascade) — this removes them from every week's
+// results and the season standings, not just going forward.
+export async function deletePlayer(playerId: string) {
+  await requireAdmin();
+  await prisma.player.delete({ where: { id: playerId } });
+  revalidatePath("/admin/users");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  return { ok: true };
+}
+
+export async function createPlayerForUser(userId: string, name: string) {
+  await requireAdmin();
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name can't be empty." };
+  await prisma.player.create({ data: { ownerUserId: userId, name: trimmed } });
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
 export async function syncScoresNow() {
   await requireAdmin();
   const { syncAllActiveWeeks } = await import("@/lib/sync-scores");

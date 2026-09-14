@@ -1,13 +1,14 @@
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
-import { setUserAdmin } from "@/app/admin/actions";
+import { setUserAdmin, createPlayerForUser } from "@/app/admin/actions";
+import PlayerAdminRow from "@/components/PlayerAdminRow";
 
 export default async function AdminUsersPage() {
   const session = await requireAdmin();
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "asc" },
-    include: { players: true },
+    include: { players: { orderBy: { createdAt: "asc" } } },
   });
 
   return (
@@ -16,43 +17,76 @@ export default async function AdminUsersPage() {
       <p className="text-sm text-muted mb-6">
         Everyone who has signed in at least once. There&apos;s no separate
         invite step — send people the site link and they create their spot by
-        signing in with their email.
+        signing in with their email. Rename or remove a picker profile below
+        if someone made a typo or shouldn&apos;t be picking anymore.
       </p>
 
       <div className="flex flex-col gap-2">
         {users.map((u) => (
           <div
             key={u.id}
-            className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center gap-3"
+            className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex flex-col gap-3"
           >
-            <div className="flex-1">
-              <div className="font-medium">{u.email}</div>
-              <div className="text-sm text-muted">
-                {u.players.length > 0
-                  ? `Picks for: ${u.players.map((p) => p.name).join(", ")}`
-                  : "Hasn't set up a picker profile yet"}
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <div className="font-medium">{u.email}</div>
               </div>
-            </div>
-            {u.isAdmin && (
-              <span className="text-xs font-semibold rounded-full bg-gold/20 text-gold px-2.5 py-1">
-                Admin
-              </span>
-            )}
-            {u.id !== session.user.id && (
-              <form
-                action={async () => {
-                  "use server";
-                  await setUserAdmin(u.id, !u.isAdmin);
-                }}
-              >
-                <button
-                  type="submit"
-                  className="text-xs font-medium rounded-lg border-2 border-border px-3 py-1.5 hover:border-accent/50 transition-colors"
+              {u.isAdmin && (
+                <span className="text-xs font-semibold rounded-full bg-gold/20 text-gold px-2.5 py-1">
+                  Admin
+                </span>
+              )}
+              {u.id !== session.user.id && (
+                <form
+                  action={async () => {
+                    "use server";
+                    await setUserAdmin(u.id, !u.isAdmin);
+                  }}
                 >
-                  {u.isAdmin ? "Remove admin" : "Make admin"}
-                </button>
-              </form>
-            )}
+                  <button
+                    type="submit"
+                    className="text-xs font-medium rounded-lg border-2 border-border px-3 py-1.5 hover:border-accent/50 transition-colors"
+                  >
+                    {u.isAdmin ? "Remove admin" : "Make admin"}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {u.players.length === 0 && (
+                <span className="text-sm text-muted">Hasn&apos;t set up a picker profile yet</span>
+              )}
+              {u.players.map((p) => (
+                <PlayerAdminRow key={p.id} player={p} />
+              ))}
+              <details className="inline-block">
+                <summary className="cursor-pointer text-xs text-accent hover:text-accent-strong font-medium list-none">
+                  + Add picker
+                </summary>
+                <form
+                  action={async (formData: FormData) => {
+                    "use server";
+                    await createPlayerForUser(u.id, String(formData.get("name") || ""));
+                  }}
+                  className="flex items-center gap-1.5 mt-2"
+                >
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    placeholder="Name"
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent w-24"
+                  />
+                  <button
+                    type="submit"
+                    className="text-xs rounded-full border-2 border-accent text-accent px-2.5 py-1 font-semibold hover:bg-accent hover:text-white transition-colors"
+                  >
+                    Add
+                  </button>
+                </form>
+              </details>
+            </div>
           </div>
         ))}
         {users.length === 0 && <p className="text-muted">No one has signed in yet.</p>}
