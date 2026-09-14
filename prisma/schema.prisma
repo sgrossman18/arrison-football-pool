@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Local dev uses SQLite (no Postgres available on this machine).
+  // For production, change provider to "postgresql", point DATABASE_URL at
+  // your Neon/Vercel Postgres connection string, delete this migrations
+  // folder, and run `npx prisma migrate dev` once to generate fresh
+  // Postgres migrations. See DEPLOY.md.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  accounts      Account[]
+  sessions      Session[]
+  players       Player[]
+}
+
+// The actual pool participant/picker. Usually one Player per User, but a
+// login can own several — e.g. a parent's email signs in and submits picks
+// for their kids too, each as their own named Player with their own
+// standings.
+model Player {
+  id          String   @id @default(cuid())
+  name        String
+  ownerUserId String
+  createdAt   DateTime @default(now())
+
+  owner         User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  picks         Pick[]
+  lockOverrides LockOverride[]
+}
+
+// NextAuth (Auth.js) required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Season {
+  id    String @id @default(cuid())
+  year  Int    @unique
+  weeks Week[]
+}
+
+model Week {
+  id            String   @id @default(cuid())
+  seasonId      String
+  weekNumber    Int
+  // Rich-ish intro shown on the picks page: plain text/markdown, can include
+  // image/GIF URLs which the UI renders inline.
+  introMarkdown String   @default("")
+  // Whole-week lock: derived by default from the earliest game's kickoff,
+  // but an admin can force an early/late lock here (e.g. for special cases).
+  locksAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  games         Game[]
+  lockOverrides LockOverride[]
+
+  @@unique([seasonId, weekNumber])
+}
+
+model Game {
+  id           String    @id @default(cuid())
+  weekId       String
+  homeTeam     String // team abbreviation, e.g. "KC"
+  awayTeam     String
+  kickoff      DateTime
+  // ESPN scoreboard event id, used to poll/match this game to live scores.
+  espnEventId  String?
+  homeScore    Int?
+  awayScore    Int?
+  // SCHEDULED | IN_PROGRESS | FINAL
+  status       String    @default("SCHEDULED")
+  updatedAt    DateTime  @updatedAt
+
+  week  Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  picks Pick[]
+}
+
+model Pick {
+  id           String   @id @default(cuid())
+  playerId     String
+  gameId       String
+  pickedTeam   String // team abbreviation
+  confidence   Int // 1-5, unique per player per week
+  submittedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, gameId])
+}
+
+// Admin-granted exception letting one player submit/edit picks after a week
+// has otherwise locked.
+model LockOverride {
+  id        String   @id @default(cuid())
+  weekId    String
+  playerId  String
+  note      String?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  week   Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([weekId, playerId])
+}

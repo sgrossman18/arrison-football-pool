@@ -1,0 +1,302 @@
+import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/require-admin";
+import { prisma } from "@/lib/db";
+import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
+import { utcToEasternDatetimeLocal, formatEastern } from "@/lib/timezone";
+import { effectiveLockTime } from "@/lib/locking";
+import WeekIntro from "@/components/WeekIntro";
+import {
+  addGame,
+  updateGame,
+  deleteGame,
+  updateIntro,
+  setWeekLockOverrideTime,
+  grantLockOverride,
+  revokeLockOverride,
+} from "@/app/admin/actions";
+
+export default async function WeekEditorPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  await requireAdmin();
+  const { id } = await params;
+
+  const week = await prisma.week.findUnique({
+    where: { id },
+    include: {
+      games: { orderBy: { kickoff: "asc" } },
+      lockOverrides: { include: { player: true } },
+    },
+  });
+  if (!week) notFound();
+
+  const allPlayers = await prisma.player.findMany({ orderBy: { name: "asc" } });
+  const overriddenPlayerIds = new Set(week.lockOverrides.map((o) => o.playerId));
+  const candidatesForOverride = allPlayers.filter((p) => !overriddenPlayerIds.has(p.id));
+
+  const computedLock = effectiveLockTime({
+    locksAt: null,
+    gameKickoffs: week.games.map((g) => g.kickoff),
+  });
+
+  return (
+    <div className="flex flex-col gap-10">
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Week {week.weekNumber}</h1>
+        <p className="text-sm text-neutral-500">
+          Pick the ~5 closest matchups (by Vegas spread), ignoring Thursday night.
+        </p>
+      </div>
+
+      {/* Games */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Games</h2>
+        <div className="flex flex-col gap-3">
+          {week.games.map((g) => (
+            <form
+              key={g.id}
+              action={async (formData: FormData) => {
+                "use server";
+                await updateGame(g.id, week.id, {
+                  homeTeam: String(formData.get("homeTeam")),
+                  awayTeam: String(formData.get("awayTeam")),
+                  kickoff: String(formData.get("kickoff")),
+                });
+              }}
+              className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 flex items-center gap-3 flex-wrap"
+            >
+              <TeamSelect name="awayTeam" defaultValue={g.awayTeam} />
+              <span className="text-neutral-500">@</span>
+              <TeamSelect name="homeTeam" defaultValue={g.homeTeam} />
+              <input
+                type="datetime-local"
+                name="kickoff"
+                defaultValue={utcToEasternDatetimeLocal(g.kickoff)}
+                required
+                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+              />
+              <span className="text-xs text-neutral-500">ET</span>
+              <button
+                type="submit"
+                className="rounded-md bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800"
+              >
+                Save
+              </button>
+              <span className="text-xs text-neutral-500">
+                {g.status}
+                {g.status === "FINAL" ? ` ${g.awayScore}-${g.homeScore}` : ""}
+              </span>
+              <span className="flex-1" />
+              <button
+                formAction={async () => {
+                  "use server";
+                  await deleteGame(g.id, week.id);
+                }}
+                className="text-xs text-red-600 hover:underline"
+              >
+                Remove
+              </button>
+            </form>
+          ))}
+
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              await addGame(week.id, {
+                homeTeam: String(formData.get("homeTeam")),
+                awayTeam: String(formData.get("awayTeam")),
+                kickoff: String(formData.get("kickoff")),
+              });
+            }}
+            className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 flex items-center gap-3 flex-wrap"
+          >
+            <TeamSelect name="awayTeam" placeholder="Away team" />
+            <span className="text-neutral-500">@</span>
+            <TeamSelect name="homeTeam" placeholder="Home team" />
+            <input
+              type="datetime-local"
+              name="kickoff"
+              required
+              className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+            />
+            <span className="text-xs text-neutral-500">ET</span>
+            <button
+              type="submit"
+              className="rounded-md border border-emerald-700 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 hover:text-white"
+            >
+              + Add game
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* Intro / GIF */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Weekly intro</h2>
+        <p className="text-sm text-neutral-500 mb-3">
+          Write whatever intro/trash talk you want. Paste an image or GIF link on
+          its own line to embed it (works great with Giphy/Tenor links).
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            await updateIntro(week.id, String(formData.get("introMarkdown")));
+          }}
+          className="flex flex-col gap-3"
+        >
+          <textarea
+            name="introMarkdown"
+            defaultValue={week.introMarkdown}
+            rows={8}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 font-mono text-sm"
+          />
+          <button
+            type="submit"
+            className="self-start rounded-md bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
+          >
+            Save intro
+          </button>
+        </form>
+        {week.introMarkdown && (
+          <div className="mt-4">
+            <p className="text-xs text-neutral-500 mb-2">Preview:</p>
+            <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4">
+              <WeekIntro markdown={week.introMarkdown} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Locking */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Picks lock</h2>
+        <p className="text-sm text-neutral-500 mb-3">
+          Picks normally lock automatically at kickoff of the earliest game
+          {computedLock ? ` (currently ${formatEastern(computedLock)})` : ""}. You
+          can force a different lock time below, or leave blank to use the
+          automatic time.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            const value = String(formData.get("locksAt"));
+            await setWeekLockOverrideTime(week.id, value || null);
+          }}
+          className="flex items-center gap-3 flex-wrap"
+        >
+          <input
+            type="datetime-local"
+            name="locksAt"
+            defaultValue={week.locksAt ? utcToEasternDatetimeLocal(week.locksAt) : ""}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+          />
+          <span className="text-xs text-neutral-500">ET</span>
+          <button
+            type="submit"
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-sm hover:border-emerald-600"
+          >
+            Set forced lock time
+          </button>
+        </form>
+
+        <div className="mt-5">
+          <p className="text-sm font-medium mb-2">Exceptions (let someone submit late)</p>
+          <div className="flex flex-col gap-2 mb-3">
+            {week.lockOverrides.map((o) => (
+              <div
+                key={o.id}
+                className="flex items-center gap-2 text-sm rounded-md bg-neutral-100 dark:bg-neutral-900 px-3 py-2"
+              >
+                <span className="font-medium">{o.player.name}</span>
+                {o.note && <span className="text-neutral-500">— {o.note}</span>}
+                <span className="flex-1" />
+                <form
+                  action={async () => {
+                    "use server";
+                    await revokeLockOverride(week.id, o.playerId);
+                  }}
+                >
+                  <button className="text-xs text-red-600 hover:underline" type="submit">
+                    Revoke
+                  </button>
+                </form>
+              </div>
+            ))}
+            {week.lockOverrides.length === 0 && (
+              <p className="text-sm text-neutral-500">No exceptions granted.</p>
+            )}
+          </div>
+
+          {candidatesForOverride.length > 0 && (
+            <form
+              action={async (formData: FormData) => {
+                "use server";
+                await grantLockOverride(
+                  week.id,
+                  String(formData.get("playerId")),
+                  String(formData.get("note") || "") || undefined,
+                );
+              }}
+              className="flex items-center gap-2 flex-wrap"
+            >
+              <select
+                name="playerId"
+                required
+                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+              >
+                <option value="">Grant exception to...</option>
+                {candidatesForOverride.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name="note"
+                placeholder="Reason (optional)"
+                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+              />
+              <button
+                type="submit"
+                className="rounded-md border border-emerald-700 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 hover:text-white"
+              >
+                Grant
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TeamSelect({
+  name,
+  defaultValue,
+  placeholder,
+}: {
+  name: string;
+  defaultValue?: string;
+  placeholder?: string;
+}) {
+  return (
+    <select
+      name={name}
+      defaultValue={defaultValue ?? ""}
+      required
+      className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+    >
+      <option value="" disabled>
+        {placeholder ?? "Team"}
+      </option>
+      {TEAM_ABBREVIATIONS.map((abbr) => (
+        <option key={abbr} value={abbr}>
+          {teamName(abbr)}
+        </option>
+      ))}
+    </select>
+  );
+}
