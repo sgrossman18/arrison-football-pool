@@ -17,7 +17,9 @@ and standings all happen automatically.
   register.
 - **ESPN's public scoreboard feed** — free, no API key, used to auto-detect
   game results and grade picks.
-- **Vercel** — hosting + free cron for a backstop score sync.
+- **Vercel** — hosting + a daily cron as a backstop score sync (Hobby plan
+  caps cron frequency at once/day — fine, since the real mechanism is the
+  opportunistic sync on page load).
 
 See [`DEPLOY.md`](./DEPLOY.md) for how to put this online.
 

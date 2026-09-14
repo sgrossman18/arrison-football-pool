@@ -90,11 +90,12 @@ git push -u origin main
 
 ## 5. Confirm the cron job
 
-`vercel.json` already schedules `/api/cron/sync-scores` every 15 minutes as
-a backstop (Vercel's free Hobby plan may collapse this to once/day — that's
-fine, because the app *also* refreshes scores opportunistically the moment
-anyone loads Results or Standings during/after a game, which is the main
-mechanism that gets you "results right away"). Nothing to configure.
+`vercel.json` schedules `/api/cron/sync-scores` once a day (Vercel's free
+Hobby plan rejects anything more frequent — it errors the deploy outright
+rather than silently downgrading it). That's fine as a pure backstop: the
+app *also* refreshes scores opportunistically the moment anyone loads
+Results or Standings during/after a game, which is the main mechanism that
+gets you "results right away." Nothing to configure.
 
 ## 6. Add a custom domain (optional)
 
