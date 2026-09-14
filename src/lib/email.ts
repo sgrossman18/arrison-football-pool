@@ -33,6 +33,17 @@ export async function sendMagicLinkEmail({
   identifier: string;
   url: string;
 }) {
+  // The raw Auth.js callback URL signs the person in the instant it's
+  // fetched — no click required. Some email providers (Microsoft 365 Safe
+  // Links is common at .edu/corporate domains) automatically prefetch every
+  // link in an email to scan it, which silently burns the one-time token
+  // before the person ever opens the message, so their real click then
+  // fails with "invalid or expired." Routing through a plain confirmation
+  // page instead means a scanner's GET just renders inert HTML — only an
+  // actual click on the button navigates to the real callback URL.
+  const origin = new URL(url).origin;
+  const confirmUrl = `${origin}/signin/confirm?url=${encodeURIComponent(url)}`;
+
   await sendEmail({
     to: email,
     subject: "Your Arrison Football Pool sign-in link",
@@ -41,7 +52,7 @@ export async function sendMagicLinkEmail({
         <h2>🏈 Arrison Football Pool</h2>
         <p>Click below to sign in and make your picks:</p>
         <p>
-          <a href="${url}" style="display:inline-block;padding:12px 20px;background:#1a5d3a;color:#fff;text-decoration:none;border-radius:6px;">
+          <a href="${confirmUrl}" style="display:inline-block;padding:12px 20px;background:#1a5d3a;color:#fff;text-decoration:none;border-radius:6px;">
             Sign in
           </a>
         </p>
