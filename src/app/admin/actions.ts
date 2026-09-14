@@ -61,16 +61,32 @@ export async function updateGame(
   data: { homeTeam: string; awayTeam: string; kickoff: string },
 ) {
   await requireAdmin();
+
+  const existing = await prisma.game.findUnique({ where: { id: gameId } });
+  const matchupChanged =
+    existing && (existing.homeTeam !== data.homeTeam || existing.awayTeam !== data.awayTeam);
+
   await prisma.game.update({
     where: { id: gameId },
     data: {
       homeTeam: data.homeTeam,
       awayTeam: data.awayTeam,
       kickoff: easternDatetimeLocalToUtc(data.kickoff),
+      // A changed matchup invalidates any scores already pulled in for it.
+      ...(matchupChanged && { status: "SCHEDULED", homeScore: null, awayScore: null, espnEventId: null }),
     },
   });
+
+  // Existing picks reference the old teams — swapping the matchup makes them
+  // meaningless (they'd silently score 0 forever instead of erroring), so
+  // clear them and let people re-pick.
+  if (matchupChanged) {
+    await prisma.pick.deleteMany({ where: { gameId } });
+  }
+
   revalidatePath(`/admin/weeks/${weekId}`);
   revalidatePath("/picks");
+  revalidatePath("/results");
 }
 
 export async function deleteGame(gameId: string, weekId: string) {

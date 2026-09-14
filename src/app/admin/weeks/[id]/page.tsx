@@ -50,6 +50,24 @@ export default async function WeekEditorPage({
     gameKickoffs: week.games.map((g) => g.kickoff),
   });
 
+  const weekPicks = await prisma.pick.findMany({
+    where: { gameId: { in: week.games.map((g) => g.id) } },
+    select: { playerId: true, gameId: true },
+  });
+  const pickCountByPlayer = new Map<string, Set<string>>();
+  for (const p of weekPicks) {
+    if (!pickCountByPlayer.has(p.playerId)) pickCountByPlayer.set(p.playerId, new Set());
+    pickCountByPlayer.get(p.playerId)!.add(p.gameId);
+  }
+  const totalGames = week.games.length;
+  const submissionStatus = allPlayers.map((p) => {
+    const count = pickCountByPlayer.get(p.id)?.size ?? 0;
+    const status = count === 0 ? "none" : count === totalGames ? "done" : "partial";
+    return { player: p, count, status };
+  });
+  const notDone = submissionStatus.filter((s) => s.status !== "done");
+  const done = submissionStatus.filter((s) => s.status === "done");
+
   return (
     <div className="flex flex-col gap-10">
       <div>
@@ -58,6 +76,53 @@ export default async function WeekEditorPage({
           Pick the ~5 closest matchups (by Vegas spread), ignoring Thursday night.
         </p>
       </div>
+
+      {/* Submission status */}
+      {totalGames > 0 && allPlayers.length > 0 && (
+        <section>
+          <h2 className="text-lg font-bold mb-3">
+            Who&apos;s picked{" "}
+            <span className="text-muted font-medium text-base">
+              ({done.length}/{allPlayers.length})
+            </span>
+          </h2>
+          <div className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex flex-col gap-2">
+            {notDone.length === 0 ? (
+              <p className="text-sm text-accent-strong font-medium">
+                Everyone&apos;s in! 🎉
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {notDone.map(({ player, status, count }) => (
+                  <span
+                    key={player.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 px-3 py-1 text-xs font-semibold"
+                  >
+                    {player.name}
+                    {status === "partial" && (
+                      <span className="opacity-70 font-normal">
+                        {count}/{totalGames}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {done.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1 pt-3 border-t border-border">
+                {done.map(({ player }) => (
+                  <span
+                    key={player.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-accent-soft text-accent-strong px-2.5 py-1 text-xs font-medium"
+                  >
+                    ✓ {player.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Games */}
       <section>
