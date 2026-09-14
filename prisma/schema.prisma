@@ -3,13 +3,11 @@ generator client {
 }
 
 datasource db {
-  // Local dev uses SQLite (no Postgres available on this machine).
-  // For production, change provider to "postgresql", point DATABASE_URL at
-  // your Neon/Vercel Postgres connection string, delete this migrations
-  // folder, and run `npx prisma migrate dev` once to generate fresh
-  // Postgres migrations. See DEPLOY.md.
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection for normal app queries (serverless-friendly).
+  url       = env("DATABASE_URL")
+  // Unpooled connection, used only when running migrations.
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
