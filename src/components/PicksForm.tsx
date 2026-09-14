@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { teamName } from "@/lib/teams";
+import { NFL_TEAMS, teamName } from "@/lib/teams";
 
 export type PicksFormGame = {
   id: string;
@@ -46,6 +46,7 @@ export default function PicksForm({
 
   const n = games.length;
   const confidenceOptions = Array.from({ length: n }, (_, i) => i + 1);
+  const usedConfidences = new Set(Object.values(confByGame));
 
   function pickTeam(gameId: string, team: string) {
     setSuccess(false);
@@ -74,12 +75,12 @@ export default function PicksForm({
       setError("Pick a winner for every game.");
       return;
     }
-    const usedConfidences = games.map((g) => confByGame[g.id]);
-    if (usedConfidences.some((c) => !c)) {
+    const confidences = games.map((g) => confByGame[g.id]);
+    if (confidences.some((c) => !c)) {
       setError("Set a confidence value (1-5) for every game.");
       return;
     }
-    const unique = new Set(usedConfidences);
+    const unique = new Set(confidences);
     if (unique.size !== n) {
       setError("Each confidence value can only be used once.");
       return;
@@ -104,77 +105,107 @@ export default function PicksForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {!canSubmit && (
-        <div className="rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-4 py-3 text-sm">
+        <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 px-4 py-3 text-sm font-medium">
           {lockMessage ?? "Picks are locked for this week."}
         </div>
       )}
       {canSubmit && lockMessage && (
-        <div className="rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-200 px-4 py-3 text-sm">
+        <div className="rounded-xl bg-accent-soft text-accent-strong px-4 py-3 text-sm font-medium">
           {lockMessage}
         </div>
       )}
 
-      {games.map((game) => (
-        <div
-          key={game.id}
-          className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4 flex items-center justify-between gap-4 flex-wrap"
-        >
-          <div className="flex gap-2">
-            {[game.awayTeam, game.homeTeam].map((team) => (
-              <button
-                type="button"
-                key={team}
-                disabled={!canSubmit}
-                onClick={() => pickTeam(game.id, team)}
-                className={`rounded-md px-4 py-2 text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  teamByGame[game.id] === team
-                    ? "bg-emerald-700 border-emerald-700 text-white"
-                    : "border-neutral-300 dark:border-neutral-700 hover:border-emerald-600"
-                }`}
-              >
-                {teamName(team)}
-              </button>
-            ))}
-            <span className="self-center text-xs text-neutral-500 px-1">
+      {games.map((game) => {
+        const picked = teamByGame[game.id];
+        const confidence = confByGame[game.id];
+        return (
+          <div
+            key={game.id}
+            className="rounded-2xl border border-border bg-surface shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+          >
+            <div className="text-xs text-muted font-medium w-24 shrink-0">
               {game.awayTeam} @ {game.homeTeam}
-            </span>
+            </div>
+
+            <div className="flex gap-2 flex-1">
+              {[game.awayTeam, game.homeTeam].map((team) => {
+                const isSelected = picked === team;
+                const color = NFL_TEAMS[team]?.color ?? "#525252";
+                return (
+                  <button
+                    type="button"
+                    key={team}
+                    disabled={!canSubmit}
+                    onClick={() => pickTeam(game.id, team)}
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: color,
+                            borderColor: color,
+                            // Guards against near-black/near-white team colors
+                            // (e.g. Bears, Raiders) vanishing into the page background.
+                            boxShadow: "inset 0 0 0 1px rgba(128,128,128,0.4)",
+                          }
+                        : undefined
+                    }
+                    className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                      isSelected
+                        ? "text-white shadow-md"
+                        : "border-border text-foreground hover:border-accent/50 bg-surface-2"
+                    }`}
+                  >
+                    {!isSelected && (
+                      <span
+                        className="inline-block h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                    )}
+                    {teamName(team)}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 sm:justify-end">
+              <span className="text-xs text-muted font-medium mr-1">Confidence</span>
+              <div className="flex gap-1">
+                {confidenceOptions.map((v) => {
+                  const isSelected = confidence === v;
+                  const isTakenElsewhere = usedConfidences.has(v) && !isSelected;
+                  return (
+                    <button
+                      type="button"
+                      key={v}
+                      disabled={!canSubmit}
+                      onClick={() => pickConfidence(game.id, v)}
+                      className={`h-8 w-8 rounded-full text-sm font-semibold border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        isSelected
+                          ? "bg-accent border-accent text-white shadow-sm"
+                          : isTakenElsewhere
+                            ? "border-border text-muted/40"
+                            : "border-border text-foreground hover:border-accent/50"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
+        );
+      })}
 
-          <label className="flex items-center gap-2 text-sm">
-            Confidence
-            <select
-              disabled={!canSubmit}
-              value={confByGame[game.id] ?? ""}
-              onChange={(e) => pickConfidence(game.id, Number(e.target.value))}
-              className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 disabled:opacity-50"
-            >
-              <option value="" disabled>
-                --
-              </option>
-              {confidenceOptions.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      ))}
-
-      {error && (
-        <div className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</div>
-      )}
+      {error && <div className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</div>}
       {success && (
-        <div className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">
-          Picks saved!
-        </div>
+        <div className="text-sm text-accent-strong font-medium">Picks saved!</div>
       )}
 
       {canSubmit && (
         <button
           type="submit"
           disabled={isPending}
-          className="self-start rounded-md bg-emerald-700 text-white px-5 py-2.5 font-medium hover:bg-emerald-800 disabled:opacity-60"
+          className="self-start rounded-full bg-accent text-white px-6 py-2.5 font-semibold shadow-md shadow-accent/20 hover:bg-accent-strong transition-colors disabled:opacity-60"
         >
           {isPending ? "Saving..." : "Save picks"}
         </button>

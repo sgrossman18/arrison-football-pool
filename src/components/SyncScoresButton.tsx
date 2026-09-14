@@ -22,11 +22,11 @@ export default function SyncScoresButton() {
             );
           })
         }
-        className="rounded-md border border-neutral-300 dark:border-neutral-700 px-4 py-2 text-sm hover:border-emerald-600 disabled:opacity-60"
+        className="rounded-lg border-2 border-border px-4 py-2 text-sm font-medium hover:border-accent/50 transition-colors disabled:opacity-60"
       >
         {isPending ? "Syncing…" : "Sync scores now"}
       </button>
-      {message && <span className="text-xs text-neutral-500">{message}</span>}
+      {message && <span className="text-xs text-muted">{message}</span>}
     </div>
   );
 }

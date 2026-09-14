@@ -15,6 +15,15 @@ import {
   revokeLockOverride,
 } from "@/app/admin/actions";
 
+const INPUT =
+  "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
+const BTN_PRIMARY =
+  "rounded-lg bg-accent text-white px-3.5 py-1.5 text-sm font-semibold hover:bg-accent-strong transition-colors shadow-sm";
+const BTN_OUTLINE =
+  "rounded-lg border-2 border-border px-3.5 py-1.5 text-sm font-medium hover:border-accent/50 transition-colors";
+const BTN_OUTLINE_ACCENT =
+  "rounded-lg border-2 border-accent text-accent px-3.5 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors";
+
 export default async function WeekEditorPage({
   params,
 }: {
@@ -44,15 +53,15 @@ export default async function WeekEditorPage({
   return (
     <div className="flex flex-col gap-10">
       <div>
-        <h1 className="text-2xl font-bold mb-1">Week {week.weekNumber}</h1>
-        <p className="text-sm text-neutral-500">
+        <h1 className="text-3xl font-extrabold tracking-tight mb-1">Week {week.weekNumber}</h1>
+        <p className="text-sm text-muted">
           Pick the ~5 closest matchups (by Vegas spread), ignoring Thursday night.
         </p>
       </div>
 
       {/* Games */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Games</h2>
+        <h2 className="text-lg font-bold mb-3">Games</h2>
         <div className="flex flex-col gap-3">
           {week.games.map((g) => (
             <form
@@ -65,26 +74,23 @@ export default async function WeekEditorPage({
                   kickoff: String(formData.get("kickoff")),
                 });
               }}
-              className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 flex items-center gap-3 flex-wrap"
+              className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center gap-3 flex-wrap"
             >
               <TeamSelect name="awayTeam" defaultValue={g.awayTeam} />
-              <span className="text-neutral-500">@</span>
+              <span className="text-muted">@</span>
               <TeamSelect name="homeTeam" defaultValue={g.homeTeam} />
               <input
                 type="datetime-local"
                 name="kickoff"
                 defaultValue={utcToEasternDatetimeLocal(g.kickoff)}
                 required
-                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+                className={INPUT}
               />
-              <span className="text-xs text-neutral-500">ET</span>
-              <button
-                type="submit"
-                className="rounded-md bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800"
-              >
+              <span className="text-xs text-muted">ET</span>
+              <button type="submit" className={BTN_PRIMARY}>
                 Save
               </button>
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-muted font-medium">
                 {g.status}
                 {g.status === "FINAL" ? ` ${g.awayScore}-${g.homeScore}` : ""}
               </span>
@@ -94,7 +100,7 @@ export default async function WeekEditorPage({
                   "use server";
                   await deleteGame(g.id, week.id);
                 }}
-                className="text-xs text-red-600 hover:underline"
+                className="text-xs text-red-600 hover:underline font-medium"
               >
                 Remove
               </button>
@@ -110,22 +116,14 @@ export default async function WeekEditorPage({
                 kickoff: String(formData.get("kickoff")),
               });
             }}
-            className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 flex items-center gap-3 flex-wrap"
+            className="rounded-2xl border-2 border-dashed border-border p-4 flex items-center gap-3 flex-wrap"
           >
             <TeamSelect name="awayTeam" placeholder="Away team" />
-            <span className="text-neutral-500">@</span>
+            <span className="text-muted">@</span>
             <TeamSelect name="homeTeam" placeholder="Home team" />
-            <input
-              type="datetime-local"
-              name="kickoff"
-              required
-              className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
-            />
-            <span className="text-xs text-neutral-500">ET</span>
-            <button
-              type="submit"
-              className="rounded-md border border-emerald-700 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 hover:text-white"
-            >
+            <input type="datetime-local" name="kickoff" required className={INPUT} />
+            <span className="text-xs text-muted">ET</span>
+            <button type="submit" className={BTN_OUTLINE_ACCENT}>
               + Add game
             </button>
           </form>
@@ -134,8 +132,8 @@ export default async function WeekEditorPage({
 
       {/* Intro / GIF */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Weekly intro</h2>
-        <p className="text-sm text-neutral-500 mb-3">
+        <h2 className="text-lg font-bold mb-3">Weekly intro</h2>
+        <p className="text-sm text-muted mb-3">
           Write whatever intro/trash talk you want. Paste an image or GIF link on
           its own line to embed it (works great with Giphy/Tenor links).
         </p>
@@ -150,29 +148,24 @@ export default async function WeekEditorPage({
             name="introMarkdown"
             defaultValue={week.introMarkdown}
             rows={8}
-            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 font-mono text-sm"
+            className={`${INPUT} font-mono`}
           />
-          <button
-            type="submit"
-            className="self-start rounded-md bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
-          >
+          <button type="submit" className={`${BTN_PRIMARY} self-start`}>
             Save intro
           </button>
         </form>
         {week.introMarkdown && (
           <div className="mt-4">
-            <p className="text-xs text-neutral-500 mb-2">Preview:</p>
-            <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4">
-              <WeekIntro markdown={week.introMarkdown} />
-            </div>
+            <p className="text-xs text-muted mb-2 font-medium">Preview:</p>
+            <WeekIntro markdown={week.introMarkdown} />
           </div>
         )}
       </section>
 
       {/* Locking */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Picks lock</h2>
-        <p className="text-sm text-neutral-500 mb-3">
+        <h2 className="text-lg font-bold mb-3">Picks lock</h2>
+        <p className="text-sm text-muted mb-3">
           Picks normally lock automatically at kickoff of the earliest game
           {computedLock ? ` (currently ${formatEastern(computedLock)})` : ""}. You
           can force a different lock time below, or leave blank to use the
@@ -190,27 +183,24 @@ export default async function WeekEditorPage({
             type="datetime-local"
             name="locksAt"
             defaultValue={week.locksAt ? utcToEasternDatetimeLocal(week.locksAt) : ""}
-            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+            className={INPUT}
           />
-          <span className="text-xs text-neutral-500">ET</span>
-          <button
-            type="submit"
-            className="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-sm hover:border-emerald-600"
-          >
+          <span className="text-xs text-muted">ET</span>
+          <button type="submit" className={BTN_OUTLINE}>
             Set forced lock time
           </button>
         </form>
 
         <div className="mt-5">
-          <p className="text-sm font-medium mb-2">Exceptions (let someone submit late)</p>
+          <p className="text-sm font-semibold mb-2">Exceptions (let someone submit late)</p>
           <div className="flex flex-col gap-2 mb-3">
             {week.lockOverrides.map((o) => (
               <div
                 key={o.id}
-                className="flex items-center gap-2 text-sm rounded-md bg-neutral-100 dark:bg-neutral-900 px-3 py-2"
+                className="flex items-center gap-2 text-sm rounded-xl bg-surface-2 px-3.5 py-2.5"
               >
-                <span className="font-medium">{o.player.name}</span>
-                {o.note && <span className="text-neutral-500">— {o.note}</span>}
+                <span className="font-semibold">{o.player.name}</span>
+                {o.note && <span className="text-muted">— {o.note}</span>}
                 <span className="flex-1" />
                 <form
                   action={async () => {
@@ -218,14 +208,14 @@ export default async function WeekEditorPage({
                     await revokeLockOverride(week.id, o.playerId);
                   }}
                 >
-                  <button className="text-xs text-red-600 hover:underline" type="submit">
+                  <button className="text-xs text-red-600 hover:underline font-medium" type="submit">
                     Revoke
                   </button>
                 </form>
               </div>
             ))}
             {week.lockOverrides.length === 0 && (
-              <p className="text-sm text-neutral-500">No exceptions granted.</p>
+              <p className="text-sm text-muted">No exceptions granted.</p>
             )}
           </div>
 
@@ -241,11 +231,7 @@ export default async function WeekEditorPage({
               }}
               className="flex items-center gap-2 flex-wrap"
             >
-              <select
-                name="playerId"
-                required
-                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
-              >
+              <select name="playerId" required className={INPUT}>
                 <option value="">Grant exception to...</option>
                 {candidatesForOverride.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -253,16 +239,8 @@ export default async function WeekEditorPage({
                   </option>
                 ))}
               </select>
-              <input
-                type="text"
-                name="note"
-                placeholder="Reason (optional)"
-                className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
-              />
-              <button
-                type="submit"
-                className="rounded-md border border-emerald-700 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 hover:text-white"
-              >
+              <input type="text" name="note" placeholder="Reason (optional)" className={INPUT} />
+              <button type="submit" className={BTN_OUTLINE_ACCENT}>
                 Grant
               </button>
             </form>
@@ -283,12 +261,7 @@ function TeamSelect({
   placeholder?: string;
 }) {
   return (
-    <select
-      name={name}
-      defaultValue={defaultValue ?? ""}
-      required
-      className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
-    >
+    <select name={name} defaultValue={defaultValue ?? ""} required className={INPUT}>
       <option value="" disabled>
         {placeholder ?? "Team"}
       </option>

@@ -6,10 +6,12 @@ export default function WeekIntro({ markdown }: { markdown: string }) {
   if (!markdown.trim()) return null;
 
   return (
-    <div className="prose prose-neutral dark:prose-invert prose-img:rounded-lg prose-img:max-h-80 max-w-none mb-6">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-        {autoEmbedImageUrls(markdown)}
-      </ReactMarkdown>
+    <div className="rounded-2xl border border-border bg-surface shadow-sm p-5 mb-6">
+      <div className="prose prose-neutral dark:prose-invert prose-img:rounded-xl prose-img:max-h-80 max-w-none prose-p:text-foreground prose-headings:text-foreground">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {autoEmbedImageUrls(markdown)}
+        </ReactMarkdown>
+      </div>
     </div>
   );
 }

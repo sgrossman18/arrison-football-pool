@@ -39,7 +39,7 @@ export default async function PicksPage({
 
   if (!week || week.games.length === 0) {
     return (
-      <div className="text-neutral-600 dark:text-neutral-400">
+      <div className="rounded-2xl border border-border bg-surface shadow-sm p-6 text-muted">
         No games have been set up for this week yet. Check back soon!
       </div>
     );
@@ -75,9 +75,11 @@ export default async function PicksPage({
       )}
       <AddPlayerLink />
 
-      <h1 className="text-2xl font-bold mb-1 mt-3">
+      <h1 className="text-3xl font-extrabold tracking-tight mb-1 mt-3">
         Week {week.weekNumber}
-        {players.length > 1 ? ` — ${activePlayer.name}'s picks` : ""}
+        {players.length > 1 && (
+          <span className="text-muted font-medium"> — {activePlayer.name}&apos;s picks</span>
+        )}
       </h1>
       <WeekIntro markdown={week.introMarkdown} />
 
@@ -115,10 +117,10 @@ function PlayerTabs({
         <Link
           key={p.id}
           href={`/picks?player=${p.id}`}
-          className={`rounded-md px-3 py-1.5 text-sm border ${
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium border-2 transition-colors ${
             p.id === activePlayerId
-              ? "bg-emerald-700 border-emerald-700 text-white"
-              : "border-neutral-300 dark:border-neutral-700 hover:border-emerald-600"
+              ? "bg-accent border-accent text-white shadow-sm"
+              : "border-border text-foreground hover:border-accent/50"
           }`}
         >
           {p.name}
@@ -131,7 +133,7 @@ function PlayerTabs({
 function AddPlayerLink() {
   return (
     <details className="mt-2 text-sm">
-      <summary className="cursor-pointer text-emerald-700 dark:text-emerald-400 inline">
+      <summary className="cursor-pointer text-accent hover:text-accent-strong inline font-medium">
         + Add someone else I&apos;m picking for
       </summary>
       <form
@@ -150,11 +152,11 @@ function AddPlayerLink() {
           name="name"
           required
           placeholder="e.g. Aria"
-          className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm"
+          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
         />
         <button
           type="submit"
-          className="rounded-md border border-emerald-700 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 hover:text-white"
+          className="rounded-lg border-2 border-accent text-accent px-3 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors"
         >
           Add
         </button>
@@ -165,38 +167,40 @@ function AddPlayerLink() {
 
 function FirstPlayerPrompt({ defaultName }: { defaultName?: string | null }) {
   return (
-    <div className="max-w-sm mx-auto py-16">
-      <h1 className="text-2xl font-bold mb-2">Welcome! 🏈</h1>
-      <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-sm">
-        What&apos;s your name? If you&apos;ll also be picking for family
-        members without their own email, you can add them next.
-      </p>
-      <form
-        action={async (formData: FormData) => {
-          "use server";
-          const name = String(formData.get("name") || "");
-          const result = await createPlayer(name);
-          if (result.ok && result.playerId) {
-            redirect(`/picks?player=${result.playerId}`);
-          }
-        }}
-        className="flex flex-col gap-3"
-      >
-        <input
-          type="text"
-          name="name"
-          required
-          defaultValue={defaultName ?? ""}
-          placeholder="Your name"
-          className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2"
-        />
-        <button
-          type="submit"
-          className="rounded-md bg-emerald-700 text-white px-4 py-2 font-medium hover:bg-emerald-800"
+    <div className="max-w-sm mx-auto py-12 sm:py-20">
+      <div className="rounded-2xl border border-border bg-surface shadow-sm p-7">
+        <h1 className="text-2xl font-bold mb-2">Welcome! 🏈</h1>
+        <p className="text-muted mb-6 text-sm">
+          What&apos;s your name? If you&apos;ll also be picking for family
+          members without their own email, you can add them next.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            const name = String(formData.get("name") || "");
+            const result = await createPlayer(name);
+            if (result.ok && result.playerId) {
+              redirect(`/picks?player=${result.playerId}`);
+            }
+          }}
+          className="flex flex-col gap-3"
         >
-          Continue
-        </button>
-      </form>
+          <input
+            type="text"
+            name="name"
+            required
+            defaultValue={defaultName ?? ""}
+            placeholder="Your name"
+            className="rounded-lg border border-border bg-background px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-accent text-white px-4 py-2.5 font-semibold hover:bg-accent-strong transition-colors"
+          >
+            Continue
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

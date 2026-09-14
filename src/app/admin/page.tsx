@@ -18,19 +18,21 @@ export default async function AdminDashboard() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">Admin — {season.year} Season</h1>
-        <div className="flex gap-2">
+        <h1 className="text-3xl font-extrabold tracking-tight">
+          Admin <span className="text-muted font-medium">— {season.year} Season</span>
+        </h1>
+        <div className="flex gap-2 flex-wrap">
           <SyncScoresButton />
           <Link
             href="/admin/users"
-            className="rounded-md border border-neutral-300 dark:border-neutral-700 px-4 py-2 text-sm hover:border-emerald-600"
+            className="rounded-lg border-2 border-border px-4 py-2 text-sm font-medium hover:border-accent/50 transition-colors"
           >
             Manage participants
           </Link>
           <form action={createNextWeek}>
             <button
               type="submit"
-              className="rounded-md bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800"
+              className="rounded-lg bg-accent text-white px-4 py-2 text-sm font-semibold hover:bg-accent-strong transition-colors shadow-sm"
             >
               + Create Week {(weeks[0]?.weekNumber ?? 0) + 1}
             </button>
@@ -43,18 +45,16 @@ export default async function AdminDashboard() {
           <Link
             key={w.id}
             href={`/admin/weeks/${w.id}`}
-            className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4 flex items-center justify-between hover:border-emerald-600"
+            className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center justify-between hover:border-accent/50 transition-colors"
           >
-            <span className="font-medium">Week {w.weekNumber}</span>
-            <span className="text-sm text-neutral-500">
+            <span className="font-semibold">Week {w.weekNumber}</span>
+            <span className="text-sm text-muted">
               {w.games.length} game{w.games.length === 1 ? "" : "s"} set up
             </span>
           </Link>
         ))}
         {weeks.length === 0 && (
-          <p className="text-neutral-600 dark:text-neutral-400">
-            No weeks yet — create the first one above.
-          </p>
+          <p className="text-muted">No weeks yet — create the first one above.</p>
         )}
       </div>
     </div>

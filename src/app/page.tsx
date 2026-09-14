@@ -8,17 +8,25 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-20 text-center">
-      <h1 className="text-3xl font-bold">🏈 Arrison Football Pool</h1>
-      <p className="text-neutral-600 dark:text-neutral-400 max-w-sm">
-        Sign in to make your weekly picks, see results, and check the season
-        standings.
-      </p>
+    <div className="flex flex-col items-center justify-center gap-7 py-16 sm:py-24 text-center">
+      <div className="relative">
+        <div className="absolute inset-0 -z-10 blur-3xl opacity-40 bg-accent rounded-full scale-150" />
+        <span className="text-6xl">🏈</span>
+      </div>
+      <div>
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+          Arrison Football Pool
+        </h1>
+        <p className="text-muted mt-3 max-w-sm mx-auto">
+          Make your weekly picks, see results the moment games end, and track
+          the season standings.
+        </p>
+      </div>
       <a
         href="/signin"
-        className="rounded-md bg-emerald-700 text-white px-5 py-2.5 font-medium hover:bg-emerald-800"
+        className="rounded-full bg-accent text-white px-7 py-3 font-semibold shadow-lg shadow-accent/20 hover:bg-accent-strong transition-colors"
       >
-        Sign in
+        Sign in to play
       </a>
     </div>
   );
