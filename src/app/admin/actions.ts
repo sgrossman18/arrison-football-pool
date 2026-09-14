@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { getOrCreateCurrentSeason } from "@/lib/season";
-import { easternDateAt1pmToUtc, formatEastern } from "@/lib/timezone";
+import {
+  easternDateAt1pmToUtc,
+  formatEastern,
+  utcToEasternDateOnly,
+  addDaysToDateOnly,
+  nextEasternSundayDateOnly,
+} from "@/lib/timezone";
 import { effectiveLockTime } from "@/lib/locking";
 
 export async function createNextWeek() {
@@ -14,9 +20,33 @@ export async function createNextWeek() {
   const last = await prisma.week.findFirst({
     where: { seasonId: season.id },
     orderBy: { weekNumber: "desc" },
+    include: { games: true },
   });
+
+  // Default the new week's deadline to Sunday 1pm ET — the Sunday right
+  // after the previous week's deadline if there is one, otherwise the next
+  // upcoming Sunday from today. Uses the *effective* lock time (falls back
+  // to computing from real per-game kickoffs) rather than the raw
+  // `locksAt` column, since a week set up under the old per-game-kickoff
+  // flow never has `locksAt` set at all — using the raw column would
+  // default the new week to the *same* Sunday as the last one instead of
+  // the next one.
+  const lastDeadline = last
+    ? effectiveLockTime({
+        locksAt: last.locksAt,
+        gameKickoffs: last.games.map((g) => g.kickoff),
+      })
+    : null;
+  const defaultDeadlineDate = lastDeadline
+    ? addDaysToDateOnly(utcToEasternDateOnly(lastDeadline), 7)
+    : nextEasternSundayDateOnly();
+
   const week = await prisma.week.create({
-    data: { seasonId: season.id, weekNumber: (last?.weekNumber ?? 0) + 1 },
+    data: {
+      seasonId: season.id,
+      weekNumber: (last?.weekNumber ?? 0) + 1,
+      locksAt: easternDateAt1pmToUtc(defaultDeadlineDate),
+    },
   });
   revalidatePath("/admin");
   redirect(`/admin/weeks/${week.id}`);

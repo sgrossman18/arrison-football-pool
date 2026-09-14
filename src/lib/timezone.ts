@@ -99,3 +99,34 @@ export function easternDateAt1pmToUtc(dateOnly: string): Date {
 export function utcToEasternDateOnly(date: Date): string {
   return utcToEasternDatetimeLocal(date).split("T")[0];
 }
+
+// Pure calendar-date arithmetic on a YYYY-MM-DD string — deliberately not
+// timezone-aware (no real instant involved), so it can't be thrown off by a
+// DST transition falling between the two dates the way adding a fixed
+// 7*24h to a UTC instant could.
+export function addDaysToDateOnly(dateOnly: string, days: number): string {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+const EASTERN_WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+// The Eastern-calendar Sunday on or after `after` — used to default a new
+// week's deadline date without the admin having to pick it manually.
+export function nextEasternSundayDateOnly(after: Date = new Date()): string {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).format(after);
+  const daysUntilSunday = (7 - EASTERN_WEEKDAY_INDEX[weekday]) % 7;
+  const candidate = new Date(after.getTime() + daysUntilSunday * 86_400_000);
+  return utcToEasternDateOnly(candidate);
+}
