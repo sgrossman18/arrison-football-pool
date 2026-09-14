@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { getOrCreateCurrentSeason } from "@/lib/season";
-import { easternDatetimeLocalToUtc, formatEastern } from "@/lib/timezone";
+import { easternDateAt1pmToUtc, formatEastern } from "@/lib/timezone";
 import { effectiveLockTime } from "@/lib/locking";
 
 export async function createNextWeek() {
@@ -29,27 +29,32 @@ export async function updateIntro(weekId: string, introMarkdown: string) {
   revalidatePath("/picks");
 }
 
-export async function setWeekLockOverrideTime(weekId: string, locksAt: string | null) {
+// The pool's whole deadline model: every game a given week locks at the
+// same fixed time (1:00 PM ET) on one date the admin sets once — no more
+// picking a kickoff per game. `date` is a plain YYYY-MM-DD string, or null
+// to clear it (falls back to no deadline until set again).
+export async function setWeekDeadline(weekId: string, date: string | null) {
   await requireAdmin();
   await prisma.week.update({
     where: { id: weekId },
-    data: { locksAt: locksAt ? easternDatetimeLocalToUtc(locksAt) : null },
+    data: { locksAt: date ? easternDateAt1pmToUtc(date) : null },
   });
   revalidatePath(`/admin/weeks/${weekId}`);
   revalidatePath("/picks");
 }
 
-export async function addGame(
-  weekId: string,
-  data: { homeTeam: string; awayTeam: string; kickoff: string },
-) {
+export async function addGame(weekId: string, data: { homeTeam: string; awayTeam: string }) {
   await requireAdmin();
+  const week = await prisma.week.findUniqueOrThrow({ where: { id: weekId } });
   await prisma.game.create({
     data: {
       weekId,
       homeTeam: data.homeTeam,
       awayTeam: data.awayTeam,
-      kickoff: easternDatetimeLocalToUtc(data.kickoff),
+      // Games no longer track a real kickoff — every game locks with the
+      // week's single deadline, so this just mirrors it for the (now
+      // vestigial, but still non-null) column.
+      kickoff: week.locksAt ?? new Date(),
     },
   });
   revalidatePath(`/admin/weeks/${weekId}`);
@@ -59,7 +64,7 @@ export async function addGame(
 export async function updateGame(
   gameId: string,
   weekId: string,
-  data: { homeTeam: string; awayTeam: string; kickoff: string },
+  data: { homeTeam: string; awayTeam: string },
 ) {
   await requireAdmin();
 
@@ -72,7 +77,6 @@ export async function updateGame(
     data: {
       homeTeam: data.homeTeam,
       awayTeam: data.awayTeam,
-      kickoff: easternDatetimeLocalToUtc(data.kickoff),
       // A changed matchup invalidates any scores already pulled in for it.
       ...(matchupChanged && { status: "SCHEDULED", homeScore: null, awayScore: null, espnEventId: null }),
     },

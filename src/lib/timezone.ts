@@ -85,3 +85,17 @@ export function utcToEasternDatetimeLocal(date: Date): string {
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
+
+export const DEADLINE_TIME_ET = "1:00 PM ET";
+
+// The pool's picks deadline is always 1:00 PM Eastern on a single date the
+// admin picks — no per-game kickoff entry needed. Combines a plain
+// YYYY-MM-DD date with that fixed time.
+export function easternDateAt1pmToUtc(dateOnly: string): Date {
+  return easternDatetimeLocalToUtc(`${dateOnly}T13:00`);
+}
+
+// Inverse, for pre-filling the deadline date input — just the date part.
+export function utcToEasternDateOnly(date: Date): string {
+  return utcToEasternDatetimeLocal(date).split("T")[0];
+}

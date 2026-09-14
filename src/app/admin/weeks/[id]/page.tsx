@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
 import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
-import { utcToEasternDatetimeLocal, formatEastern } from "@/lib/timezone";
-import { effectiveLockTime } from "@/lib/locking";
+import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/timezone";
 import WeekIntro from "@/components/WeekIntro";
 import RemindersButton from "@/components/RemindersButton";
 import {
@@ -11,7 +10,7 @@ import {
   updateGame,
   deleteGame,
   updateIntro,
-  setWeekLockOverrideTime,
+  setWeekDeadline,
   grantLockOverride,
   revokeLockOverride,
 } from "@/app/admin/actions";
@@ -20,8 +19,6 @@ const INPUT =
   "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
 const BTN_PRIMARY =
   "rounded-lg bg-accent text-white px-3.5 py-1.5 text-sm font-semibold hover:bg-accent-strong transition-colors shadow-sm";
-const BTN_OUTLINE =
-  "rounded-lg border-2 border-border px-3.5 py-1.5 text-sm font-medium hover:border-accent/50 transition-colors";
 const BTN_OUTLINE_ACCENT =
   "rounded-lg border-2 border-accent text-accent px-3.5 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors";
 
@@ -45,11 +42,6 @@ export default async function WeekEditorPage({
   const allPlayers = await prisma.player.findMany({ orderBy: { name: "asc" } });
   const overriddenPlayerIds = new Set(week.lockOverrides.map((o) => o.playerId));
   const candidatesForOverride = allPlayers.filter((p) => !overriddenPlayerIds.has(p.id));
-
-  const computedLock = effectiveLockTime({
-    locksAt: null,
-    gameKickoffs: week.games.map((g) => g.kickoff),
-  });
 
   const weekPicks = await prisma.pick.findMany({
     where: { gameId: { in: week.games.map((g) => g.id) } },
@@ -77,6 +69,92 @@ export default async function WeekEditorPage({
           Pick the ~5 closest matchups (by Vegas spread), ignoring Thursday night.
         </p>
       </div>
+
+      {/* Deadline */}
+      <section>
+        <h2 className="text-lg font-bold mb-3">Deadline</h2>
+        <p className="text-sm text-muted mb-3">
+          Every pick this week is due at the same time — {DEADLINE_TIME_ET}
+          {week.locksAt ? `, currently ${formatEastern(week.locksAt)}` : ""}. Set the date below;
+          the time is always {DEADLINE_TIME_ET}.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            const value = String(formData.get("deadline"));
+            await setWeekDeadline(week.id, value || null);
+          }}
+          className="flex items-center gap-3 flex-wrap"
+        >
+          <input
+            type="date"
+            name="deadline"
+            defaultValue={week.locksAt ? utcToEasternDateOnly(week.locksAt) : ""}
+            required
+            className={INPUT}
+          />
+          <span className="text-xs text-muted">at {DEADLINE_TIME_ET}</span>
+          <button type="submit" className={BTN_PRIMARY}>
+            Set deadline
+          </button>
+        </form>
+
+        <div className="mt-5">
+          <p className="text-sm font-semibold mb-2">Exceptions (let someone submit late)</p>
+          <div className="flex flex-col gap-2 mb-3">
+            {week.lockOverrides.map((o) => (
+              <div
+                key={o.id}
+                className="flex items-center gap-2 text-sm rounded-xl bg-surface-2 px-3.5 py-2.5"
+              >
+                <span className="font-semibold">{o.player.name}</span>
+                {o.note && <span className="text-muted">— {o.note}</span>}
+                <span className="flex-1" />
+                <form
+                  action={async () => {
+                    "use server";
+                    await revokeLockOverride(week.id, o.playerId);
+                  }}
+                >
+                  <button className="text-xs text-red-600 hover:underline font-medium" type="submit">
+                    Revoke
+                  </button>
+                </form>
+              </div>
+            ))}
+            {week.lockOverrides.length === 0 && (
+              <p className="text-sm text-muted">No exceptions granted.</p>
+            )}
+          </div>
+
+          {candidatesForOverride.length > 0 && (
+            <form
+              action={async (formData: FormData) => {
+                "use server";
+                await grantLockOverride(
+                  week.id,
+                  String(formData.get("playerId")),
+                  String(formData.get("note") || "") || undefined,
+                );
+              }}
+              className="flex items-center gap-2 flex-wrap"
+            >
+              <select name="playerId" required className={INPUT}>
+                <option value="">Grant exception to...</option>
+                {candidatesForOverride.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <input type="text" name="note" placeholder="Reason (optional)" className={INPUT} />
+              <button type="submit" className={BTN_OUTLINE_ACCENT}>
+                Grant
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
 
       {/* Submission status */}
       {totalGames > 0 && allPlayers.length > 0 && (
@@ -140,7 +218,6 @@ export default async function WeekEditorPage({
                 await updateGame(g.id, week.id, {
                   homeTeam: String(formData.get("homeTeam")),
                   awayTeam: String(formData.get("awayTeam")),
-                  kickoff: String(formData.get("kickoff")),
                 });
               }}
               className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center gap-3 flex-wrap"
@@ -148,14 +225,6 @@ export default async function WeekEditorPage({
               <TeamSelect name="awayTeam" defaultValue={g.awayTeam} />
               <span className="text-muted">@</span>
               <TeamSelect name="homeTeam" defaultValue={g.homeTeam} />
-              <input
-                type="datetime-local"
-                name="kickoff"
-                defaultValue={utcToEasternDatetimeLocal(g.kickoff)}
-                required
-                className={INPUT}
-              />
-              <span className="text-xs text-muted">ET</span>
               <button type="submit" className={BTN_PRIMARY}>
                 Save
               </button>
@@ -176,26 +245,29 @@ export default async function WeekEditorPage({
             </form>
           ))}
 
-          <form
-            action={async (formData: FormData) => {
-              "use server";
-              await addGame(week.id, {
-                homeTeam: String(formData.get("homeTeam")),
-                awayTeam: String(formData.get("awayTeam")),
-                kickoff: String(formData.get("kickoff")),
-              });
-            }}
-            className="rounded-2xl border-2 border-dashed border-border p-4 flex items-center gap-3 flex-wrap"
-          >
-            <TeamSelect name="awayTeam" placeholder="Away team" />
-            <span className="text-muted">@</span>
-            <TeamSelect name="homeTeam" placeholder="Home team" />
-            <input type="datetime-local" name="kickoff" required className={INPUT} />
-            <span className="text-xs text-muted">ET</span>
-            <button type="submit" className={BTN_OUTLINE_ACCENT}>
-              + Add game
-            </button>
-          </form>
+          {week.locksAt ? (
+            <form
+              action={async (formData: FormData) => {
+                "use server";
+                await addGame(week.id, {
+                  homeTeam: String(formData.get("homeTeam")),
+                  awayTeam: String(formData.get("awayTeam")),
+                });
+              }}
+              className="rounded-2xl border-2 border-dashed border-border p-4 flex items-center gap-3 flex-wrap"
+            >
+              <TeamSelect name="awayTeam" placeholder="Away team" />
+              <span className="text-muted">@</span>
+              <TeamSelect name="homeTeam" placeholder="Home team" />
+              <button type="submit" className={BTN_OUTLINE_ACCENT}>
+                + Add game
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm text-muted rounded-2xl border-2 border-dashed border-border p-4">
+              Set the deadline above before adding games.
+            </p>
+          )}
         </div>
       </section>
 
@@ -229,92 +301,6 @@ export default async function WeekEditorPage({
             <WeekIntro markdown={week.introMarkdown} />
           </div>
         )}
-      </section>
-
-      {/* Locking */}
-      <section>
-        <h2 className="text-lg font-bold mb-3">Picks lock</h2>
-        <p className="text-sm text-muted mb-3">
-          Picks normally lock automatically at kickoff of the earliest game
-          {computedLock ? ` (currently ${formatEastern(computedLock)})` : ""}. You
-          can force a different lock time below, or leave blank to use the
-          automatic time.
-        </p>
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            const value = String(formData.get("locksAt"));
-            await setWeekLockOverrideTime(week.id, value || null);
-          }}
-          className="flex items-center gap-3 flex-wrap"
-        >
-          <input
-            type="datetime-local"
-            name="locksAt"
-            defaultValue={week.locksAt ? utcToEasternDatetimeLocal(week.locksAt) : ""}
-            className={INPUT}
-          />
-          <span className="text-xs text-muted">ET</span>
-          <button type="submit" className={BTN_OUTLINE}>
-            Set forced lock time
-          </button>
-        </form>
-
-        <div className="mt-5">
-          <p className="text-sm font-semibold mb-2">Exceptions (let someone submit late)</p>
-          <div className="flex flex-col gap-2 mb-3">
-            {week.lockOverrides.map((o) => (
-              <div
-                key={o.id}
-                className="flex items-center gap-2 text-sm rounded-xl bg-surface-2 px-3.5 py-2.5"
-              >
-                <span className="font-semibold">{o.player.name}</span>
-                {o.note && <span className="text-muted">— {o.note}</span>}
-                <span className="flex-1" />
-                <form
-                  action={async () => {
-                    "use server";
-                    await revokeLockOverride(week.id, o.playerId);
-                  }}
-                >
-                  <button className="text-xs text-red-600 hover:underline font-medium" type="submit">
-                    Revoke
-                  </button>
-                </form>
-              </div>
-            ))}
-            {week.lockOverrides.length === 0 && (
-              <p className="text-sm text-muted">No exceptions granted.</p>
-            )}
-          </div>
-
-          {candidatesForOverride.length > 0 && (
-            <form
-              action={async (formData: FormData) => {
-                "use server";
-                await grantLockOverride(
-                  week.id,
-                  String(formData.get("playerId")),
-                  String(formData.get("note") || "") || undefined,
-                );
-              }}
-              className="flex items-center gap-2 flex-wrap"
-            >
-              <select name="playerId" required className={INPUT}>
-                <option value="">Grant exception to...</option>
-                {candidatesForOverride.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <input type="text" name="note" placeholder="Reason (optional)" className={INPUT} />
-              <button type="submit" className={BTN_OUTLINE_ACCENT}>
-                Grant
-              </button>
-            </form>
-          )}
-        </div>
       </section>
     </div>
   );
