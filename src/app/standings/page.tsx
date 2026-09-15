@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getOrCreateCurrentSeason } from "@/lib/season";
-import { computeSeasonStandings } from "@/lib/scoring";
+import { computeSeasonStandings, rankStandings } from "@/lib/scoring";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -31,21 +31,23 @@ export default async function StandingsPage() {
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
   const playerById = new Map(players.map((p) => [p.id, p]));
 
-  const standings = computeSeasonStandings(
-    weeks.map((w) => ({
-      weekNumber: w.weekNumber,
-      games: w.games,
-      picks: picks
-        .filter((p) => w.games.some((g) => g.id === p.gameId))
-        .map((p) => ({
-          playerId: p.playerId,
-          gameId: p.gameId,
-          pickedTeam: p.pickedTeam,
-          confidence: p.confidence,
-        })),
-    })),
-    playerIds,
-  ).sort((a, b) => b.bestTotal - a.bestTotal || b.seasonTotal - a.seasonTotal);
+  const standings = rankStandings(
+    computeSeasonStandings(
+      weeks.map((w) => ({
+        weekNumber: w.weekNumber,
+        games: w.games,
+        picks: picks
+          .filter((p) => w.games.some((g) => g.id === p.gameId))
+          .map((p) => ({
+            playerId: p.playerId,
+            gameId: p.gameId,
+            pickedTeam: p.pickedTeam,
+            confidence: p.confidence,
+          })),
+      })),
+      playerIds,
+    ),
+  );
 
   const showDrop = standings.some((s) => s.droppedWeeks.length > 0);
 
@@ -84,7 +86,7 @@ export default async function StandingsPage() {
                     }`}
                   >
                     <td className="py-2.5 pl-4 pr-2 font-semibold text-muted">
-                      {MEDALS[i] ?? i + 1}
+                      {s.tied ? `T-${s.rank}` : (MEDALS[s.rank - 1] ?? s.rank)}
                     </td>
                     <td className="py-2.5 pr-3 font-medium whitespace-nowrap">
                       {player?.name ?? "?"}
