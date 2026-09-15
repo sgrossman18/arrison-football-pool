@@ -186,6 +186,79 @@ export async function createPlayerForUser(userId: string, name: string) {
   return { ok: true };
 }
 
+// For the "same person ended up with two logins" case (e.g. someone's .edu
+// email had trouble so they signed in with a personal Gmail instead,
+// creating a second picker). Moves every pick and lock override from
+// `sourcePlayerId` onto `targetPlayerId`, then deletes the source player —
+// so all of that person's history lives under one entry in results and
+// standings. If both players happened to pick the same game (e.g. they
+// used both logins in the same week), the target's existing pick is kept
+// and the source's conflicting one is dropped rather than silently
+// overwriting real data either direction.
+export async function mergePlayers(sourcePlayerId: string, targetPlayerId: string) {
+  await requireAdmin();
+  if (sourcePlayerId === targetPlayerId) {
+    return { ok: false, error: "Can't merge a player into itself." };
+  }
+
+  const [source, target] = await Promise.all([
+    prisma.player.findUnique({
+      where: { id: sourcePlayerId },
+      include: { picks: true, lockOverrides: true },
+    }),
+    prisma.player.findUnique({ where: { id: targetPlayerId } }),
+  ]);
+  if (!source || !target) return { ok: false, error: "Player not found." };
+
+  const [targetPicks, targetOverrides] = await Promise.all([
+    prisma.pick.findMany({ where: { playerId: targetPlayerId }, select: { gameId: true } }),
+    prisma.lockOverride.findMany({ where: { playerId: targetPlayerId }, select: { weekId: true } }),
+  ]);
+  const targetGameIds = new Set(targetPicks.map((p) => p.gameId));
+  const targetWeekIds = new Set(targetOverrides.map((o) => o.weekId));
+
+  const picksToMove = source.picks.filter((p) => !targetGameIds.has(p.gameId));
+  const overridesToMove = source.lockOverrides.filter((o) => !targetWeekIds.has(o.weekId));
+  const skippedPicks = source.picks.length - picksToMove.length;
+
+  await prisma.$transaction([
+    ...picksToMove.map((p) =>
+      prisma.pick.update({ where: { id: p.id }, data: { playerId: targetPlayerId } }),
+    ),
+    ...overridesToMove.map((o) =>
+      prisma.lockOverride.update({ where: { id: o.id }, data: { playerId: targetPlayerId } }),
+    ),
+    // Cascades away anything left on source (the conflicting duplicates we
+    // deliberately didn't move).
+    prisma.player.delete({ where: { id: sourcePlayerId } }),
+  ]);
+
+  revalidatePath("/admin/users");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  revalidatePath("/picks");
+  return { ok: true, movedPicks: picksToMove.length, skippedPicks };
+}
+
+// Only for a login that's been fully merged away (no players left) — lets
+// the admin fully remove an abandoned duplicate email rather than leaving
+// it sitting around as a dead account. Refuses if it still owns any
+// players, so this can't be used to accidentally wipe someone's season.
+export async function deleteUserLogin(userId: string) {
+  await requireAdmin();
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { players: true } });
+  if (!user) return { ok: false, error: "User not found." };
+  if (user.players.length > 0) {
+    return {
+      ok: false,
+      error: "This login still has picker profiles — merge or remove those first.",
+    };
+  }
+  await prisma.user.delete({ where: { id: userId } });
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
 export async function syncScoresNow() {
   await requireAdmin();
   const { syncAllActiveWeeks } = await import("@/lib/sync-scores");

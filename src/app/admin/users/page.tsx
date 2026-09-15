@@ -2,6 +2,8 @@ import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
 import { setUserAdmin, createPlayerForUser } from "@/app/admin/actions";
 import PlayerAdminRow from "@/components/PlayerAdminRow";
+import MergePlayersForm from "@/components/MergePlayersForm";
+import DeleteUserLoginButton from "@/components/DeleteUserLoginButton";
 
 export default async function AdminUsersPage() {
   const session = await requireAdmin();
@@ -10,6 +12,10 @@ export default async function AdminUsersPage() {
     orderBy: { createdAt: "asc" },
     include: { players: { orderBy: { createdAt: "asc" } } },
   });
+
+  const allPlayers = users.flatMap((u) =>
+    u.players.map((p) => ({ id: p.id, label: `${p.name} (${u.email})` })),
+  );
 
   return (
     <div>
@@ -20,6 +26,22 @@ export default async function AdminUsersPage() {
         signing in with their email. Rename or remove a picker profile below
         if someone made a typo or shouldn&apos;t be picking anymore.
       </p>
+
+      {allPlayers.length > 1 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-bold mb-1">Merge duplicate pickers</h2>
+          <p className="text-sm text-muted mb-3">
+            If the same person ended up with two logins (e.g. a school email
+            had trouble so they signed in with a personal one instead), merge
+            the duplicate&apos;s picks into the account they actually use —
+            nothing gets lost, and results/standings show just one entry
+            going forward.
+          </p>
+          <div className="rounded-2xl border border-border bg-surface shadow-sm p-4">
+            <MergePlayersForm players={allPlayers} />
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-col gap-2">
         {users.map((u) => (
@@ -50,6 +72,9 @@ export default async function AdminUsersPage() {
                     {u.isAdmin ? "Remove admin" : "Make admin"}
                   </button>
                 </form>
+              )}
+              {u.id !== session.user.id && u.players.length === 0 && (
+                <DeleteUserLoginButton userId={u.id} email={u.email} />
               )}
             </div>
 
