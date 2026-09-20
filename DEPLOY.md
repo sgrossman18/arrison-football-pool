@@ -123,3 +123,17 @@ things you'll actually do:
   above what a ~15-person pool needs. If usage ever grows, the only likely
   upgrade is Vercel's paid plan for more frequent cron — not needed for the
   opportunistic sync to work.
+
+## Scheduled jobs (score syncs + Tuesday results email)
+
+Vercel's free plan only runs two once-a-day crons (`vercel.json`: a daily score
+sync and the Saturday/Sunday pick reminders), so the rest is scheduled with
+GitHub Actions in `.github/workflows/scheduled-jobs.yml`:
+
+- Score syncs: Sun 4:00 PM, 8:30 PM, 11:30 PM ET; Mon 9:00 AM and 11:30 PM ET.
+- Tuesday ~7:00 AM ET: emails everyone the week's results and season standings
+  (once per week — stamped in the database).
+
+One-time setup: GitHub repo → Settings → Secrets and variables → Actions → New
+repository secret named `CRON_SECRET`, with the same value as on Vercel. You can
+also run either job by hand from the repo's Actions tab ("Run workflow").

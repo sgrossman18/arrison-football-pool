@@ -49,18 +49,17 @@ export async function sendRemindersForWeek(weekId: string, opts: { dryRun?: bool
   const deadlineText = lockTime ? `at ${formatEastern(lockTime)}` : null;
   const siteUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-  const { sendPickReminderEmail } = await import("@/lib/email");
-  let sent = 0;
-  for (const { email, names } of namesByUser.values()) {
-    await sendPickReminderEmail({
+  const { sendEmails, pickReminderEmail } = await import("@/lib/email");
+  const messages = [...namesByUser.values()].map(({ email, names }) =>
+    pickReminderEmail({
       to: email,
       weekNumber: week.weekNumber,
       playerNames: names,
       deadlineText,
       siteUrl,
-    });
-    sent += 1;
-  }
+    }),
+  );
+  await sendEmails(messages);
 
-  return { sent, recipients };
+  return { sent: messages.length, recipients };
 }

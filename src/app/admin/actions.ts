@@ -287,3 +287,11 @@ export async function deleteWeek(weekId: string) {
   revalidatePath("/standings");
   redirect("/admin");
 }
+
+export async function sendResultsEmail(weekId: string) {
+  await requireAdmin();
+  const { sendResultsEmailForWeek } = await import("@/lib/results-email");
+  const { sent, error } = await sendResultsEmailForWeek(weekId);
+  revalidatePath(`/admin/weeks/${weekId}`);
+  return { sent, error };
+}

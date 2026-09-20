@@ -62,7 +62,49 @@ export async function sendMagicLinkEmail({
   });
 }
 
-export async function sendPickReminderEmail({
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export type OutgoingEmail = { to: string; subject: string; html: string };
+
+// Sends many emails in as few Resend requests as possible (batch API, up to
+// 100 per call) instead of one request per person — avoids Resend's
+// per-second rate limit and keeps a 20-recipient send to one round trip. If
+// batching is refused for any reason it falls back to individual sends,
+// spaced out to stay under the rate limit.
+export async function sendEmails(messages: OutgoingEmail[]) {
+  if (messages.length === 0) return;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    for (const m of messages) console.log(`\n📧 "${m.subject}" to ${m.to}:\n${m.html}\n`);
+    return;
+  }
+
+  const { Resend } = await import("resend");
+  const resend = new Resend(apiKey);
+  const from = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
+
+  for (let i = 0; i < messages.length; i += 100) {
+    const chunk = messages.slice(i, i + 100);
+    const { error } = await resend.batch.send(chunk.map((m) => ({ from, ...m })));
+    if (!error) continue;
+
+    console.error("Batch send failed, falling back to individual sends:", error);
+    for (const m of chunk) {
+      const res = await resend.emails.send({ from, ...m });
+      if (res.error) throw new Error(`Failed to send email to ${m.to}: ${JSON.stringify(res.error)}`);
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+}
+
+export function pickReminderEmail({
   to,
   weekNumber,
   playerNames,
@@ -74,13 +116,14 @@ export async function sendPickReminderEmail({
   playerNames: string[];
   deadlineText: string | null;
   siteUrl: string;
-}) {
+}): OutgoingEmail {
+  playerNames = playerNames.map(escapeHtml);
   const who =
     playerNames.length === 1
       ? `${playerNames[0]} hasn't`
       : `${playerNames.slice(0, -1).join(", ")} and ${playerNames[playerNames.length - 1]} haven't`;
 
-  await sendEmail({
+  return {
     to,
     subject: `⏰ Week ${weekNumber} picks are due${deadlineText ? ` — ${deadlineText}` : ""}`,
     html: `
@@ -95,5 +138,5 @@ export async function sendPickReminderEmail({
         <p style="color:#666;font-size:13px;">You can change your picks as many times as you want right up until the deadline.</p>
       </div>
     `,
-  });
+  };
 }

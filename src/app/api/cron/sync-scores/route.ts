@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncAllActiveWeeks } from "@/lib/sync-scores";
 
+export const maxDuration = 30;
+
 // Vercel Cron (configured in vercel.json) hits this on a schedule to keep
 // scores/grading up to date without anyone needing to refresh anything.
 // Protected by CRON_SECRET so randoms can't trigger it.

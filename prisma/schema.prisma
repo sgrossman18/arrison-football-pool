@@ -91,6 +91,9 @@ model Week {
   // Whole-week lock: derived by default from the earliest game's kickoff,
   // but an admin can force an early/late lock here (e.g. for special cases).
   locksAt       DateTime?
+  // Set once the weekly results/standings email goes out, so the scheduled job
+  // (which may run more than once) can never send it twice.
+  resultsEmailSentAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

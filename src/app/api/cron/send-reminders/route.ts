@@ -10,6 +10,8 @@ import { sendRemindersForWeek } from "@/lib/reminders";
 // Unlike the score-sync cron this one emails real people, so it refuses to
 // run at all unless CRON_SECRET is configured. Add ?dryRun=1 to see who
 // would be emailed without sending anything.
+export const maxDuration = 60;
+
 const WINDOW_MS = 36 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {

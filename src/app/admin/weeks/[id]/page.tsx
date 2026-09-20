@@ -6,6 +6,7 @@ import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/tim
 import WeekIntro from "@/components/WeekIntro";
 import RemindersButton from "@/components/RemindersButton";
 import DeleteWeekButton from "@/components/DeleteWeekButton";
+import SendResultsButton from "@/components/SendResultsButton";
 import {
   addGame,
   updateGame,
@@ -15,6 +16,8 @@ import {
   grantLockOverride,
   revokeLockOverride,
 } from "@/app/admin/actions";
+
+export const maxDuration = 60;
 
 const INPUT =
   "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
@@ -204,6 +207,24 @@ export default async function WeekEditorPage({
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {/* Results email */}
+      {totalGames > 0 && (
+        <section>
+          <h2 className="text-lg font-bold mb-1">Results email</h2>
+          <p className="text-sm text-muted mb-3">
+            Sent automatically early Tuesday once every game is final.{" "}
+            {week.resultsEmailSentAt
+              ? `Already sent ${formatEastern(week.resultsEmailSentAt)}.`
+              : "Not sent yet."}
+          </p>
+          <SendResultsButton
+            weekId={week.id}
+            weekNumber={week.weekNumber}
+            sentAtText={week.resultsEmailSentAt ? formatEastern(week.resultsEmailSentAt) : null}
+          />
         </section>
       )}
 

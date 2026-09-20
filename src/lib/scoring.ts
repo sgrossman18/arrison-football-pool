@@ -142,27 +142,35 @@ export function computeSeasonStandings(
 
 export type RankedStanding = SeasonStanding & { rank: number; tied: boolean };
 
-// Sorts by bestTotal (the number that actually determines standings —
-// equal to seasonTotal until the drop-lowest-3 rule kicks in), using
-// seasonTotal only to keep display order stable when bestTotal ties.
-// Ranking itself follows standard "competition ranking" (1224): players
-// tied on bestTotal share a rank, and the next distinct value skips ahead
-// by however many were tied — e.g. two people tied for 1st, then the next
-// player is ranked 3rd, not 2nd.
+// Competition ranking (1224) over an already-sorted list: equal scores share
+// a rank and the next distinct score skips ahead by the number tied.
+export function assignRanks<T>(
+  sorted: T[],
+  score: (item: T) => number,
+): (T & { rank: number; tied: boolean })[] {
+  const ranked: (T & { rank: number; tied: boolean })[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const rank =
+      i > 0 && score(sorted[i]) === score(sorted[i - 1]) ? ranked[i - 1].rank : i + 1;
+    ranked.push({ ...sorted[i], rank, tied: false });
+  }
+  const countByRank = new Map<number, number>();
+  for (const r of ranked) countByRank.set(r.rank, (countByRank.get(r.rank) ?? 0) + 1);
+  for (const r of ranked) r.tied = (countByRank.get(r.rank) ?? 0) > 1;
+  return ranked;
+}
+
+export function formatRank(r: { rank: number; tied: boolean }): string {
+  return r.tied ? `T-${r.rank}` : String(r.rank);
+}
+
+// Sorts by bestTotal (the number that actually determines standings — equal
+// to seasonTotal until the drop-lowest-3 rule kicks in), using seasonTotal
+// only to keep display order stable when bestTotal ties. Players tied on
+// bestTotal share a rank via assignRanks.
 export function rankStandings(standings: SeasonStanding[]): RankedStanding[] {
   const sorted = [...standings].sort(
     (a, b) => b.bestTotal - a.bestTotal || b.seasonTotal - a.seasonTotal,
   );
-
-  const ranked: RankedStanding[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const rank = i > 0 && sorted[i].bestTotal === sorted[i - 1].bestTotal ? ranked[i - 1].rank : i + 1;
-    ranked.push({ ...sorted[i], rank, tied: false });
-  }
-
-  const countByRank = new Map<number, number>();
-  for (const r of ranked) countByRank.set(r.rank, (countByRank.get(r.rank) ?? 0) + 1);
-  for (const r of ranked) r.tied = (countByRank.get(r.rank) ?? 0) > 1;
-
-  return ranked;
+  return assignRanks(sorted, (s) => s.bestTotal);
 }
