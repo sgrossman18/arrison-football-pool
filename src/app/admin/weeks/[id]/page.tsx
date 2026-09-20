@@ -5,6 +5,7 @@ import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
 import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/timezone";
 import WeekIntro from "@/components/WeekIntro";
 import RemindersButton from "@/components/RemindersButton";
+import DeleteWeekButton from "@/components/DeleteWeekButton";
 import {
   addGame,
   updateGame,
@@ -301,6 +302,20 @@ export default async function WeekEditorPage({
             <WeekIntro markdown={week.introMarkdown} />
           </div>
         )}
+      </section>
+
+      {/* Danger zone */}
+      <section className="border-t border-border pt-6">
+        <h2 className="text-lg font-bold mb-1">Delete week</h2>
+        <p className="text-sm text-muted mb-3">
+          Removes this week, its games, and everyone&apos;s picks for it.
+        </p>
+        <DeleteWeekButton
+          weekId={week.id}
+          weekNumber={week.weekNumber}
+          gameCount={totalGames}
+          pickCount={weekPicks.length}
+        />
       </section>
     </div>
   );

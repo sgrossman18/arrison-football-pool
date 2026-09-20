@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getOrCreateCurrentSeason } from "@/lib/season";
+import { getCurrentWeek } from "@/lib/season";
 import { effectiveLockTime } from "@/lib/locking";
 import { sendRemindersForWeek } from "@/lib/reminders";
 
@@ -20,12 +19,7 @@ export async function GET(req: NextRequest) {
   }
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
 
-  const season = await getOrCreateCurrentSeason();
-  const week = await prisma.week.findFirst({
-    where: { seasonId: season.id },
-    orderBy: { weekNumber: "desc" },
-    include: { games: true },
-  });
+  const week = await getCurrentWeek();
   if (!week) return NextResponse.json({ skipped: "no weeks" });
 
   const lock = effectiveLockTime({

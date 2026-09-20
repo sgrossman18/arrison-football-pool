@@ -273,3 +273,17 @@ export async function sendPickReminders(weekId: string) {
   const { sent, error } = await sendRemindersForWeek(weekId);
   return { sent, error };
 }
+
+// Removes the week plus, via schema cascades, its games, every player's
+// picks for them, and any lock exceptions — and drops it from results and
+// standings. Deleting the latest week frees its number, so "Create Week N"
+// will reuse it.
+export async function deleteWeek(weekId: string) {
+  await requireAdmin();
+  await prisma.week.delete({ where: { id: weekId } });
+  revalidatePath("/admin");
+  revalidatePath("/picks");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  redirect("/admin");
+}

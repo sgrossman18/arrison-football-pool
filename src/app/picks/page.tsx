@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getCurrentWeek } from "@/lib/season";
+import { getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
 import { prisma } from "@/lib/db";
 import {
   canSubmitPicks,
@@ -18,7 +18,7 @@ import { createPlayer } from "./player-actions";
 export default async function PicksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string }>;
+  searchParams: Promise<{ player?: string; week?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
@@ -32,10 +32,14 @@ export default async function PicksPage({
     return <FirstPlayerPrompt defaultName={session.user.name} />;
   }
 
-  const { player: playerParam } = await searchParams;
+  const { player: playerParam, week: weekParam } = await searchParams;
   const activePlayer = players.find((p) => p.id === playerParam) ?? players[0];
 
-  const week = await getCurrentWeek();
+  const allWeeks = await getSeasonWeeks();
+  const browsableWeeks = allWeeks.filter((w) => w.games.length > 0);
+  const currentWeek = pickCurrentWeek(allWeeks);
+  const week =
+    browsableWeeks.find((w) => String(w.weekNumber) === weekParam) ?? currentWeek;
 
   if (!week || week.games.length === 0) {
     return (
@@ -76,9 +80,22 @@ export default async function PicksPage({
   return (
     <div>
       {players.length > 1 && (
-        <PlayerTabs players={players} activePlayerId={activePlayer.id} />
+        <PlayerTabs
+          players={players}
+          activePlayerId={activePlayer.id}
+          weekNumber={week.weekNumber}
+        />
       )}
       <AddPlayerLink />
+
+      {browsableWeeks.length > 1 && (
+        <WeekTabs
+          weeks={browsableWeeks.map((w) => w.weekNumber)}
+          activeWeek={week.weekNumber}
+          currentWeek={currentWeek?.weekNumber}
+          playerId={players.length > 1 ? activePlayer.id : undefined}
+        />
+      )}
 
       <h1 className="text-3xl font-extrabold tracking-tight mb-1 mt-3">
         Week {week.weekNumber}
@@ -110,19 +127,52 @@ export default async function PicksPage({
   );
 }
 
+function WeekTabs({
+  weeks,
+  activeWeek,
+  currentWeek,
+  playerId,
+}: {
+  weeks: number[];
+  activeWeek: number;
+  currentWeek?: number;
+  playerId?: string;
+}) {
+  return (
+    <div className="flex gap-1.5 flex-wrap mt-3">
+      {weeks.map((n) => (
+        <Link
+          key={n}
+          href={`/picks?week=${n}${playerId ? `&player=${playerId}` : ""}`}
+          className={`rounded-full px-3 py-1 text-sm font-medium border-2 transition-colors ${
+            n === activeWeek
+              ? "bg-accent border-accent text-white"
+              : "border-border text-foreground hover:border-accent/50"
+          }`}
+        >
+          Wk {n}
+          {n === currentWeek && <span className="opacity-70 text-xs"> · current</span>}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function PlayerTabs({
   players,
   activePlayerId,
+  weekNumber,
 }: {
   players: { id: string; name: string }[];
   activePlayerId: string;
+  weekNumber: number;
 }) {
   return (
     <div className="flex gap-2 flex-wrap">
       {players.map((p) => (
         <Link
           key={p.id}
-          href={`/picks?player=${p.id}`}
+          href={`/picks?week=${weekNumber}&player=${p.id}`}
           className={`rounded-full px-3.5 py-1.5 text-sm font-medium border-2 transition-colors ${
             p.id === activePlayerId
               ? "bg-accent border-accent text-white shadow-sm"
