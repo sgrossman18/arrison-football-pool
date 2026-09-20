@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { isWeekLocked } from "@/lib/locking";
+import { effectiveLockTime } from "@/lib/locking";
+import { currentWeekExpiry } from "@/lib/timezone";
 
 // One season per calendar year the NFL season starts in. Auto-creates the
 // current year's season the first time anything needs it.
@@ -21,20 +22,26 @@ export async function getSeasonWeeks() {
   });
 }
 
-// "Current" week = the one people should be picking right now: the earliest
-// week that has games and hasn't hit its deadline yet. If every week with
-// games is already locked, the most recent of those. A newly created week
-// with no games yet is skipped so it can't hide the week that's still open;
-// only if nothing has games at all do we fall back to the latest week.
+// "Current" week = the one people should be looking at right now: the earliest
+// week with games that hasn't passed its expiry yet — 7 PM Eastern on the
+// Tuesday after its deadline (see currentWeekExpiry), so a week stays up
+// through the weekend's games and early-week results instead of flipping to
+// the next one the moment picks lock. If every week with games has expired,
+// the most recent of those. A newly created week with no games yet is
+// skipped so it can't hide the active one; only if nothing has games at all
+// do we fall back to the latest week.
 export function pickCurrentWeek<
   W extends { locksAt: Date | null; games: { kickoff: Date }[] },
->(weeks: W[]): W | null {
+>(weeks: W[], now: Date = new Date()): W | null {
   const withGames = weeks.filter((w) => w.games.length > 0);
-  const open = withGames.find((w) => !isWeekLocked({
-    locksAt: w.locksAt,
-    gameKickoffs: w.games.map((g) => g.kickoff),
-  }));
-  return open ?? withGames[withGames.length - 1] ?? weeks[weeks.length - 1] ?? null;
+  const active = withGames.find((w) => {
+    const lock = effectiveLockTime({
+      locksAt: w.locksAt,
+      gameKickoffs: w.games.map((g) => g.kickoff),
+    });
+    return !lock || now < currentWeekExpiry(lock);
+  });
+  return active ?? withGames[withGames.length - 1] ?? weeks[weeks.length - 1] ?? null;
 }
 
 export async function getCurrentWeek() {

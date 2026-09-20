@@ -130,3 +130,14 @@ export function nextEasternSundayDateOnly(after: Date = new Date()): string {
   const candidate = new Date(after.getTime() + daysUntilSunday * 86_400_000);
   return utcToEasternDateOnly(candidate);
 }
+
+// A week stays "current" (the default on /picks) until 7:00 PM Eastern on the
+// first Tuesday after its deadline — for the usual Sunday deadline, that's
+// Tuesday evening two days later. Done on Eastern calendar dates so a DST
+// change in between can't shift it to 6 or 8 PM.
+export function currentWeekExpiry(lock: Date): Date {
+  const lockDate = utcToEasternDateOnly(lock);
+  const weekday = new Date(`${lockDate}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+  const daysToTuesday = ((2 - weekday + 7) % 7) || 7;
+  return easternDatetimeLocalToUtc(`${addDaysToDateOnly(lockDate, daysToTuesday)}T19:00`);
+}
