@@ -75,11 +75,13 @@ export async function setWeekDeadline(weekId: string, date: string | null) {
 export async function addGame(weekId: string, data: { homeTeam: string; awayTeam: string }) {
   await requireAdmin();
   const week = await prisma.week.findUniqueOrThrow({ where: { id: weekId } });
+  const last = await prisma.game.aggregate({ where: { weekId }, _max: { sortOrder: true } });
   await prisma.game.create({
     data: {
       weekId,
       homeTeam: data.homeTeam,
       awayTeam: data.awayTeam,
+      sortOrder: (last._max.sortOrder ?? 0) + 1,
       // Games no longer track a real kickoff — every game locks with the
       // week's single deadline, so this just mirrors it for the (now
       // vestigial, but still non-null) column.
@@ -294,4 +296,86 @@ export async function sendResultsEmail(weekId: string) {
   const { sent, error } = await sendResultsEmailForWeek(weekId);
   revalidatePath(`/admin/weeks/${weekId}`);
   return { sent, error };
+}
+
+// Rewrites sortOrder as 1..n following the given id order (also heals any
+// duplicate/zero values left over from older data).
+async function saveGameOrder(orderedGameIds: string[]) {
+  await prisma.$transaction(
+    orderedGameIds.map((id, i) =>
+      prisma.game.update({ where: { id }, data: { sortOrder: i + 1 } }),
+    ),
+  );
+}
+
+export async function moveGame(gameId: string, weekId: string, direction: "up" | "down") {
+  await requireAdmin();
+  const games = await prisma.game.findMany({
+    where: { weekId },
+    orderBy: [{ sortOrder: "asc" }, { kickoff: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+  const ids = games.map((g) => g.id);
+  const i = ids.indexOf(gameId);
+  const j = direction === "up" ? i - 1 : i + 1;
+  if (i === -1 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  await saveGameOrder(ids);
+  revalidatePath(`/admin/weeks/${weekId}`);
+  revalidatePath("/picks");
+  revalidatePath("/results");
+}
+
+// Looks up each game's real start time in ESPN's schedule, stores it, and
+// orders the week chronologically. Games that start at the same time keep
+// their current relative order (so any manual tweaks within a time slot
+// survive), and games ESPN can't match go last.
+export async function sortWeekByGameTime(weekId: string) {
+  await requireAdmin();
+  const week = await prisma.week.findUnique({
+    where: { id: weekId },
+    include: { season: true, games: { orderBy: [{ sortOrder: "asc" }, { kickoff: "asc" }, { id: "asc" }] } },
+  });
+  if (!week) return { ok: false, error: "Week not found." };
+
+  let espnGames;
+  try {
+    const { fetchWeekScoreboard } = await import("@/lib/espn");
+    espnGames = await fetchWeekScoreboard(week.season.year, week.weekNumber);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't reach ESPN's schedule." };
+  }
+
+  const startById = new Map<string, Date>();
+  for (const game of week.games) {
+    const match = espnGames.find(
+      (e) =>
+        (e.homeTeam === game.homeTeam && e.awayTeam === game.awayTeam) ||
+        (e.homeTeam === game.awayTeam && e.awayTeam === game.homeTeam),
+    );
+    if (match) startById.set(game.id, new Date(match.kickoff));
+  }
+
+  const ordered = week.games
+    .map((g, index) => ({ id: g.id, index, start: startById.get(g.id) ?? null }))
+    .sort((a, b) => {
+      if (a.start && b.start) return a.start.getTime() - b.start.getTime() || a.index - b.index;
+      if (a.start) return -1;
+      if (b.start) return 1;
+      return a.index - b.index;
+    });
+
+  await prisma.$transaction([
+    ...week.games.map((g) =>
+      prisma.game.update({ where: { id: g.id }, data: { startTime: startById.get(g.id) ?? null } }),
+    ),
+    ...ordered.map((g, i) =>
+      prisma.game.update({ where: { id: g.id }, data: { sortOrder: i + 1 } }),
+    ),
+  ]);
+
+  revalidatePath(`/admin/weeks/${weekId}`);
+  revalidatePath("/picks");
+  revalidatePath("/results");
+  return { ok: true, matched: startById.size, total: week.games.length };
 }

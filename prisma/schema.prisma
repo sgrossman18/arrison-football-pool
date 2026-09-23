@@ -110,6 +110,13 @@ model Game {
   homeTeam     String // team abbreviation, e.g. "KC"
   awayTeam     String
   kickoff      DateTime
+  // Display order within the week (lowest first); admins reorder with the
+  // arrows or "Sort by game time" on the week editor.
+  sortOrder    Int       @default(0)
+  // Real start time from ESPN's schedule, filled in when an admin sorts by
+  // game time. Only used for ordering/display — `kickoff` above stays a mirror
+  // of the week's deadline.
+  startTime    DateTime?
   // ESPN scoreboard event id, used to poll/match this game to live scores.
   espnEventId  String?
   homeScore    Int?

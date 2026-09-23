@@ -18,7 +18,7 @@ export async function getSeasonWeeks() {
   return prisma.week.findMany({
     where: { seasonId: season.id },
     orderBy: { weekNumber: "asc" },
-    include: { games: { orderBy: { kickoff: "asc" } }, lockOverrides: true },
+    include: { games: { orderBy: [{ sortOrder: "asc" }, { kickoff: "asc" }] }, lockOverrides: true },
   });
 }
 

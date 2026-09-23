@@ -35,7 +35,7 @@ export default async function ResultsPage({
   const week = await prisma.week.findUnique({
     where: { seasonId_weekNumber: { seasonId: season.id, weekNumber: selectedWeekNumber } },
     include: {
-      games: { orderBy: { kickoff: "asc" } },
+      games: { orderBy: [{ sortOrder: "asc" }, { kickoff: "asc" }] },
       lockOverrides: true,
       season: true,
     },

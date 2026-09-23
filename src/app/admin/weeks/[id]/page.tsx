@@ -7,10 +7,12 @@ import WeekIntro from "@/components/WeekIntro";
 import RemindersButton from "@/components/RemindersButton";
 import DeleteWeekButton from "@/components/DeleteWeekButton";
 import SendResultsButton from "@/components/SendResultsButton";
+import SortGamesButton from "@/components/SortGamesButton";
 import {
   addGame,
   updateGame,
   deleteGame,
+  moveGame,
   updateIntro,
   setWeekDeadline,
   grantLockOverride,
@@ -37,7 +39,7 @@ export default async function WeekEditorPage({
   const week = await prisma.week.findUnique({
     where: { id },
     include: {
-      games: { orderBy: { kickoff: "asc" } },
+      games: { orderBy: [{ sortOrder: "asc" }, { kickoff: "asc" }] },
       lockOverrides: { include: { player: true } },
     },
   });
@@ -230,9 +232,16 @@ export default async function WeekEditorPage({
 
       {/* Games */}
       <section>
-        <h2 className="text-lg font-bold mb-3">Games</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-lg font-bold">Games</h2>
+          {week.games.length > 1 && <SortGamesButton weekId={week.id} />}
+        </div>
+        <p className="text-sm text-muted mb-3">
+          This is the order everyone sees. Use the arrows to reorder, or sort by game time to
+          line them up chronologically.
+        </p>
         <div className="flex flex-col gap-3">
-          {week.games.map((g) => (
+          {week.games.map((g, idx) => (
             <form
               key={g.id}
               action={async (formData: FormData) => {
@@ -244,12 +253,43 @@ export default async function WeekEditorPage({
               }}
               className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center gap-3 flex-wrap"
             >
+              <div className="flex flex-col -my-1">
+                <button
+                  type="submit"
+                  aria-label="Move up"
+                  disabled={idx === 0}
+                  formNoValidate
+                  formAction={async () => {
+                    "use server";
+                    await moveGame(g.id, week.id, "up");
+                  }}
+                  className="text-muted hover:text-accent disabled:opacity-25 disabled:hover:text-muted leading-none px-1 py-0.5"
+                >
+                  ▲
+                </button>
+                <button
+                  type="submit"
+                  aria-label="Move down"
+                  disabled={idx === week.games.length - 1}
+                  formNoValidate
+                  formAction={async () => {
+                    "use server";
+                    await moveGame(g.id, week.id, "down");
+                  }}
+                  className="text-muted hover:text-accent disabled:opacity-25 disabled:hover:text-muted leading-none px-1 py-0.5"
+                >
+                  ▼
+                </button>
+              </div>
               <TeamSelect name="awayTeam" defaultValue={g.awayTeam} />
               <span className="text-muted">@</span>
               <TeamSelect name="homeTeam" defaultValue={g.homeTeam} />
               <button type="submit" className={BTN_PRIMARY}>
                 Save
               </button>
+              {g.startTime && (
+                <span className="text-xs text-muted">{formatEastern(g.startTime)}</span>
+              )}
               <span className="text-xs text-muted font-medium">
                 {g.status}
                 {g.status === "FINAL" ? ` ${g.awayScore}-${g.homeScore}` : ""}
