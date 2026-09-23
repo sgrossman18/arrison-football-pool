@@ -1,0 +1,64 @@
+name: Scheduled jobs
+
+# Vercel's free plan only allows two once-a-day cron jobs, so the finer-grained
+# schedule lives here instead. GitHub cron is UTC-only, so every Eastern time
+# is listed twice — once for EDT (UTC-4) and once for EST (UTC-5). Score syncs
+# are idempotent, so the off-season duplicate is a harmless extra check; the
+# results email is stamped per week in the database, so it can only send once.
+# GitHub may start scheduled runs a few minutes late.
+on:
+  schedule:
+    # Score sync: Sun 4:00 PM ET
+    - cron: "0 20 * * 0"
+    - cron: "0 21 * * 0"
+    # Score sync: Sun 8:30 PM ET
+    - cron: "30 0 * * 1"
+    - cron: "30 1 * * 1"
+    # Score sync: Sun 11:30 PM ET
+    - cron: "30 3 * * 1"
+    - cron: "30 4 * * 1"
+    # Score sync: Mon 9:00 AM ET
+    - cron: "0 13 * * 1"
+    - cron: "0 14 * * 1"
+    # Score sync: Mon 11:30 PM ET
+    - cron: "30 3 * * 2"
+    - cron: "30 4 * * 2"
+    # Results + standings email: Tue ~7:00 AM ET (6:00 AM once clocks fall back)
+    - cron: "0 11 * * 2"
+    - cron: "0 12 * * 2"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        type: choice
+        options: [sync-scores, send-results]
+        default: sync-scores
+
+permissions: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the site
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: https://arrison-football-pool.vercel.app
+          SCHEDULE: ${{ github.event.schedule }}
+          JOB_INPUT: ${{ inputs.job }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Add a repository secret named CRON_SECRET (same value as on Vercel)."
+            exit 1
+          fi
+          case "$SCHEDULE" in
+            "0 11 * * 2"|"0 12 * * 2") JOB=send-results ;;
+            "") JOB="${JOB_INPUT:-sync-scores}" ;;
+            *) JOB=sync-scores ;;
+          esac
+          echo "Running $JOB"
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            --retry 3 --retry-delay 15 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/cron/$JOB"
+          echo
