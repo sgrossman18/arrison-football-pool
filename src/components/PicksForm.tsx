@@ -16,6 +16,17 @@ export type PicksFormInitialPick = {
   confidence: number;
 };
 
+// White text on dark team colors, near-black on light ones (Steelers yellow,
+// Saints gold) so the label stays readable either way.
+function readableTextColor(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#111111" : "#ffffff";
+}
+
 export default function PicksForm({
   games,
   initialPicks,
@@ -137,24 +148,33 @@ export default function PicksForm({
                     key={team}
                     disabled={!canSubmit}
                     onClick={() => pickTeam(game.id, team)}
+                    aria-pressed={isSelected}
                     style={
                       isSelected
                         ? {
                             backgroundColor: color,
                             borderColor: color,
-                            // Guards against near-black/near-white team colors
-                            // (e.g. Bears, Raiders) vanishing into the page background.
-                            boxShadow: "inset 0 0 0 1px rgba(128,128,128,0.4)",
+                            color: readableTextColor(color),
+                            // The selection marker can't depend on the team's own
+                            // color (Jaguars/Raiders/Bears are near-black and vanish
+                            // in dark mode), so also draw a ring in the page's
+                            // foreground color — white in dark mode, black in light.
+                            outline: "2px solid var(--foreground)",
+                            outlineOffset: "2px",
                           }
                         : undefined
                     }
-                    className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                    className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                       isSelected
-                        ? "text-white shadow-md"
-                        : "border-border text-foreground hover:border-accent/50 bg-surface-2"
+                        ? "shadow-md"
+                        : "border-border text-foreground hover:border-accent/50 bg-surface-2 disabled:opacity-50"
                     }`}
                   >
-                    {!isSelected && (
+                    {isSelected ? (
+                      <span aria-hidden className="shrink-0 font-bold">
+                        ✓
+                      </span>
+                    ) : (
                       <span
                         className="inline-block h-2 w-2 rounded-full shrink-0"
                         style={{ backgroundColor: color }}
