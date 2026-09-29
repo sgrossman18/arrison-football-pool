@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
-import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
+import TeamSelect from "@/components/TeamSelect";
 import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/timezone";
 import WeekIntro from "@/components/WeekIntro";
 import RemindersButton from "@/components/RemindersButton";
@@ -281,9 +281,9 @@ export default async function WeekEditorPage({
                   ▼
                 </button>
               </div>
-              <TeamSelect name="awayTeam" defaultValue={g.awayTeam} />
+              <TeamSelect name="awayTeam" defaultValue={g.awayTeam} className={INPUT} />
               <span className="text-muted">@</span>
-              <TeamSelect name="homeTeam" defaultValue={g.homeTeam} />
+              <TeamSelect name="homeTeam" defaultValue={g.homeTeam} className={INPUT} />
               <button type="submit" className={BTN_PRIMARY}>
                 Save
               </button>
@@ -318,9 +318,9 @@ export default async function WeekEditorPage({
               }}
               className="rounded-2xl border-2 border-dashed border-border p-4 flex items-center gap-3 flex-wrap"
             >
-              <TeamSelect name="awayTeam" placeholder="Away team" />
+              <TeamSelect name="awayTeam" placeholder="Away team" className={INPUT} />
               <span className="text-muted">@</span>
-              <TeamSelect name="homeTeam" placeholder="Home team" />
+              <TeamSelect name="homeTeam" placeholder="Home team" className={INPUT} />
               <button type="submit" className={BTN_OUTLINE_ACCENT}>
                 + Add game
               </button>
@@ -382,25 +382,3 @@ export default async function WeekEditorPage({
   );
 }
 
-function TeamSelect({
-  name,
-  defaultValue,
-  placeholder,
-}: {
-  name: string;
-  defaultValue?: string;
-  placeholder?: string;
-}) {
-  return (
-    <select name={name} defaultValue={defaultValue ?? ""} required className={INPUT}>
-      <option value="" disabled>
-        {placeholder ?? "Team"}
-      </option>
-      {TEAM_ABBREVIATIONS.map((abbr) => (
-        <option key={abbr} value={abbr}>
-          {teamName(abbr)}
-        </option>
-      ))}
-    </select>
-  );
-}
