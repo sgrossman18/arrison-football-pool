@@ -127,12 +127,18 @@ things you'll actually do:
 ## Photo uploads in the weekly intro (Vercel Blob)
 
 Admins can drop an actual photo into the weekly intro, not just paste an
-image link. That uploads straight from the browser to Vercel Blob storage,
-so it needs a Blob store connected to the project:
+image link. The upload goes browser -> our server -> Vercel Blob storage
+(4MB max per image — Vercel's serverless function body limit), so it needs
+a Blob store connected to the project:
 
 1. Vercel dashboard -> your project -> **Storage** -> **Create Database** ->
    **Blob** -> connect it to this project (free tier: 5GB storage, well
-   past what a weekly photo or two needs).
+   past what a weekly photo or two needs). **Set its access to Public** —
+   these images render in a plain `<img>` tag with no auth, so a private
+   store will reject every upload with "Cannot use public access on a
+   private store." If you created it private, check the store's settings
+   in the dashboard for a way to switch it, or delete and recreate it
+   choosing public access.
 2. Vercel usually adds `BLOB_READ_WRITE_TOKEN` to the project's environment
    variables automatically when you connect it. If it's not there, copy the
    token from the Blob store's dashboard and add it yourself, then
