@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
 import TeamSelect from "@/components/TeamSelect";
 import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/timezone";
-import WeekIntro from "@/components/WeekIntro";
+import IntroEditor from "@/components/IntroEditor";
 import RemindersButton from "@/components/RemindersButton";
 import DeleteWeekButton from "@/components/DeleteWeekButton";
 import SendResultsButton from "@/components/SendResultsButton";
@@ -13,7 +13,6 @@ import {
   updateGame,
   deleteGame,
   moveGame,
-  updateIntro,
   setWeekDeadline,
   grantLockOverride,
   revokeLockOverride,
@@ -336,33 +335,7 @@ export default async function WeekEditorPage({
       {/* Intro / GIF */}
       <section>
         <h2 className="text-lg font-bold mb-3">Weekly intro</h2>
-        <p className="text-sm text-muted mb-3">
-          Write whatever intro/trash talk you want. Paste an image or GIF link on
-          its own line to embed it (works great with Giphy/Tenor links).
-        </p>
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            await updateIntro(week.id, String(formData.get("introMarkdown")));
-          }}
-          className="flex flex-col gap-3"
-        >
-          <textarea
-            name="introMarkdown"
-            defaultValue={week.introMarkdown}
-            rows={8}
-            className={`${INPUT} font-mono`}
-          />
-          <button type="submit" className={`${BTN_PRIMARY} self-start`}>
-            Save intro
-          </button>
-        </form>
-        {week.introMarkdown && (
-          <div className="mt-4">
-            <p className="text-xs text-muted mb-2 font-medium">Preview:</p>
-            <WeekIntro markdown={week.introMarkdown} />
-          </div>
-        )}
+        <IntroEditor weekId={week.id} initialMarkdown={week.introMarkdown} />
       </section>
 
       {/* Danger zone */}

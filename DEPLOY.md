@@ -124,6 +124,26 @@ things you'll actually do:
   upgrade is Vercel's paid plan for more frequent cron — not needed for the
   opportunistic sync to work.
 
+## Photo uploads in the weekly intro (Vercel Blob)
+
+Admins can drop an actual photo into the weekly intro, not just paste an
+image link. That uploads straight from the browser to Vercel Blob storage,
+so it needs a Blob store connected to the project:
+
+1. Vercel dashboard -> your project -> **Storage** -> **Create Database** ->
+   **Blob** -> connect it to this project (free tier: 5GB storage, well
+   past what a weekly photo or two needs).
+2. Vercel usually adds `BLOB_READ_WRITE_TOKEN` to the project's environment
+   variables automatically when you connect it. If it's not there, copy the
+   token from the Blob store's dashboard and add it yourself, then
+   **redeploy** — like any other env var change, it only takes effect on
+   the next deploy.
+3. For local development, copy the same token into your local `.env` as
+   `BLOB_READ_WRITE_TOKEN` (same pattern as `DATABASE_URL`/`RESEND_API_KEY`).
+
+Without this configured, pasting an image *link* into the intro still works
+fine — only the drag-and-drop/file-picker upload needs the Blob store.
+
 ## Scheduled jobs (score syncs + Tuesday results email)
 
 Vercel's free plan only runs two once-a-day crons (`vercel.json`: a daily score
