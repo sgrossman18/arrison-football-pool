@@ -1,12 +1,11 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { upload } from "@vercel/blob/client";
 import { updateIntro } from "@/app/admin/actions";
 import WeekIntro from "@/components/WeekIntro";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export default function IntroEditor({
   weekId,
@@ -31,20 +30,28 @@ export default function IntroEditor({
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError(`That image is too big — ${Math.round(file.size / 1024 / 1024)}MB, 8MB max.`);
+      setError(`That image is too big — ${Math.round(file.size / 1024 / 1024)}MB, 4MB max.`);
       return;
     }
 
     setIsUploading(true);
     try {
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/upload-intro-image",
+      const body = new FormData();
+      body.append("file", file);
+      // A hard timeout so a flaky upload fails loudly instead of leaving
+      // the button stuck on "Uploading..." forever with no explanation.
+      const res = await fetch("/api/upload-intro-image", {
+        method: "POST",
+        body,
+        signal: AbortSignal.timeout(20_000),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed.");
+
       // Insert at the cursor if the textarea has focus, otherwise append —
       // either way as its own line so it renders as an embedded image
       // rather than inline text.
-      const insert = `\n![](${blob.url})\n`;
+      const insert = `\n![](${data.url})\n`;
       const el = textareaRef.current;
       setMarkdown((prev) => {
         if (el && document.activeElement === el) {
@@ -55,7 +62,13 @@ export default function IntroEditor({
       });
       setSaved(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed — try again.");
+      setError(
+        e instanceof Error && e.name === "TimeoutError"
+          ? "Upload timed out — try again."
+          : e instanceof Error
+            ? e.message
+            : "Upload failed — try again.",
+      );
     } finally {
       setIsUploading(false);
     }
