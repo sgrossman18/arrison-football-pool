@@ -21,6 +21,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   players       Player[]
+  cheatClicks   CheatClick[]
 }
 
 // The actual pool participant/picker. Usually one Player per User, but a
@@ -100,6 +101,7 @@ model Week {
   season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   games         Game[]
   lockOverrides LockOverride[]
+  cheatClicks   CheatClick[]
 
   @@unique([seasonId, weekNumber])
 }
@@ -158,4 +160,17 @@ model LockOverride {
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([weekId, playerId])
+}
+
+// Logged every time someone clicks the "Cheat here!" nav link — a joke trap
+// that rickrolls them and immediately alerts the admin. Tied to the week so
+// the results email can call out that week's offenders.
+model CheatClick {
+  id        String   @id @default(cuid())
+  weekId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

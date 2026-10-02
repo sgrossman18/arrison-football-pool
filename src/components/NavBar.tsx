@@ -30,6 +30,9 @@ export default async function NavBar() {
             <Link href="/standings" className={NAV_LINK}>
               Standings
             </Link>
+            <Link href="/cheat" className={NAV_LINK}>
+              Cheat here!
+            </Link>
             {session.user.isAdmin && (
               <Link href="/admin" className={`${NAV_LINK} text-gold hover:text-gold`}>
                 Admin

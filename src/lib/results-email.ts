@@ -86,6 +86,13 @@ export async function buildResultsEmail(weekId: string) {
   );
   const showDrop = standings.some((s) => s.droppedWeeks.length > 0);
 
+  const cheatClicks = await prisma.cheatClick.findMany({
+    where: { weekId: thisWeek.id },
+    include: { user: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const offenders = [...new Set(cheatClicks.map((c) => escapeHtml(c.user.name || c.user.email)))];
+
   const weekWinners = weekRows.filter((r) => r.rank === 1);
   const leaders = standings.filter((s) => s.rank === 1);
   const siteUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -117,6 +124,13 @@ export async function buildResultsEmail(weekId: string) {
         ),
         2,
       )}
+
+      ${
+        offenders.length
+          ? `<h3 style="margin:22px 0 6px;">🚨 Who Tried to Cheat This Week</h3>
+             <p style="margin:0 0 6px;font-size:14px;">${offenders.join(", ")}</p>`
+          : ""
+      }
 
       <p style="margin-top:22px;">
         <a href="${siteUrl}/results?week=${week.weekNumber}" style="display:inline-block;padding:12px 20px;background:${GREEN};color:#fff;text-decoration:none;border-radius:6px;">See everyone's picks</a>

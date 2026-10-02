@@ -104,6 +104,40 @@ export async function sendEmails(messages: OutgoingEmail[]) {
   }
 }
 
+// Fired the instant someone clicks the "Cheat here!" easter egg — always to
+// the admin, never part of the normal batch-send path since there's exactly
+// one recipient and it needs to go out right away.
+export function cheatAlertEmail({
+  clickedByEmail,
+  clickedByName,
+  weekNumber,
+  clickedAt,
+}: {
+  clickedByEmail: string;
+  clickedByName: string | null;
+  weekNumber: number;
+  clickedAt: Date;
+}): OutgoingEmail {
+  const who = escapeHtml(clickedByName ? `${clickedByName} (${clickedByEmail})` : clickedByEmail);
+  const timestamp = clickedAt.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    dateStyle: "medium",
+    timeStyle: "medium",
+  });
+
+  return {
+    to: "samuel.w.grossman@gmail.com",
+    subject: `🚨 Cheat alert: ${who} just clicked it`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2>🚨 Someone took the bait</h2>
+        <p><strong>${who}</strong> clicked "Cheat here!" during Week ${weekNumber}.</p>
+        <p style="color:#666;font-size:13px;">${timestamp} ET</p>
+      </div>
+    `,
+  };
+}
+
 export function pickReminderEmail({
   to,
   weekNumber,
