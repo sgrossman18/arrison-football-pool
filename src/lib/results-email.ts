@@ -86,12 +86,26 @@ export async function buildResultsEmail(weekId: string) {
   );
   const showDrop = standings.some((s) => s.droppedWeeks.length > 0);
 
+  // Named by player, never by email — this goes out to the whole family, and
+  // a login's email address is private even when the login itself isn't.
   const cheatClicks = await prisma.cheatClick.findMany({
     where: { weekId: thisWeek.id },
-    include: { user: true },
     orderBy: { createdAt: "asc" },
   });
-  const offenders = [...new Set(cheatClicks.map((c) => escapeHtml(c.user.name || c.user.email)))];
+  const cheatUserIds = [...new Set(cheatClicks.map((c) => c.userId))];
+  const cheatPlayers = await prisma.player.findMany({ where: { ownerUserId: { in: cheatUserIds } } });
+  const playerNameByUserId = new Map<string, string>();
+  for (const p of cheatPlayers) {
+    if (!playerNameByUserId.has(p.ownerUserId)) playerNameByUserId.set(p.ownerUserId, p.name);
+  }
+  const offenders = [
+    ...new Set(
+      cheatUserIds
+        .map((id) => playerNameByUserId.get(id))
+        .filter((n): n is string => Boolean(n))
+        .map(escapeHtml),
+    ),
+  ];
 
   const weekWinners = weekRows.filter((r) => r.rank === 1);
   const leaders = standings.filter((s) => s.rank === 1);
