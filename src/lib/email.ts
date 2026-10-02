@@ -138,6 +138,42 @@ export function cheatAlertEmail({
   };
 }
 
+function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return m === 0 ? `${rem}s` : `${m}m ${rem}s`;
+}
+
+// Fired once someone navigates away from or closes the rickroll page, as a
+// follow-up to cheatAlertEmail — we can't know how long they stuck around
+// until they actually leave, so this can't be part of the immediate alert.
+export function cheatDurationEmail({
+  clickedByEmail,
+  clickedByName,
+  weekNumber,
+  seconds,
+}: {
+  clickedByEmail: string;
+  clickedByName: string | null;
+  weekNumber: number;
+  seconds: number;
+}): OutgoingEmail {
+  const who = escapeHtml(clickedByName ? `${clickedByName} (${clickedByEmail})` : clickedByEmail);
+  const duration = formatDuration(seconds);
+
+  return {
+    to: "samuel.w.grossman@gmail.com",
+    subject: `🎶 ${clickedByName ? escapeHtml(clickedByName) : who} listened for ${duration}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2>🎶 They stuck around</h2>
+        <p><strong>${who}</strong> stayed on the Week ${weekNumber} rickroll for <strong>${duration}</strong> before leaving.</p>
+      </div>
+    `,
+  };
+}
+
 export function pickReminderEmail({
   to,
   weekNumber,

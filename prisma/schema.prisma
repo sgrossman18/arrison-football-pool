@@ -170,6 +170,10 @@ model CheatClick {
   weekId    String
   userId    String
   createdAt DateTime @default(now())
+  // How long they stayed on the rickroll page before navigating away or
+  // closing the tab, reported by a beacon fired on page unload. Null until
+  // that beacon arrives (or forever, if they just leave the tab open).
+  durationSeconds Int?
 
   week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

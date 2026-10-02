@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCurrentWeek } from "@/lib/season";
 import { cheatAlertEmail, sendEmails } from "@/lib/email";
+import CheatStayTracker from "@/components/CheatStayTracker";
 
 // This page is fully dynamic (reads the session), which means Next's client
 // router can re-fetch it on its own — e.g. a tab-focus revalidation — with no
@@ -31,11 +32,14 @@ export default async function CheatPage() {
       })
     : null;
 
+  let cheatClickId = recentClick?.id ?? null;
+
   if (!recentClick) {
     if (week) {
-      await prisma.cheatClick.create({
+      const created = await prisma.cheatClick.create({
         data: { weekId: week.id, userId: session.user.id },
       });
+      cheatClickId = created.id;
     }
 
     await sendEmails([
@@ -50,6 +54,7 @@ export default async function CheatPage() {
 
   return (
     <div className="flex flex-col items-center gap-4">
+      {cheatClickId && <CheatStayTracker cheatClickId={cheatClickId} />}
       <h1 className="text-2xl font-extrabold tracking-tight text-center">
         Caught red-handed. 🚨
       </h1>
