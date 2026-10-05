@@ -3,8 +3,9 @@
 //    value (1-5, used once each) for every game you get right.
 //  - A tied game awards points to everyone who picked either team in it —
 //    nobody is "wrong" on a tie.
-//  - Season standings drop each player's 3 lowest weekly totals, once more
-//    than 3 weeks have been fully graded (see computeSeasonStandings).
+//  - Season standings drop each player's lowest weekly totals on a phased
+//    schedule: 1 dropped once 4 weeks are fully graded, 2 after 5, and 3 from
+//    week 6 on (see weeksToDrop / computeSeasonStandings).
 //
 // "Player" here means a pool participant/picker, not a login — one login
 // (User) can own several Players (e.g. a parent submitting for their kids).
@@ -99,10 +100,17 @@ export type SeasonStanding = {
   weeklyTotals: { weekNumber: number; points: number; complete: boolean }[];
   seasonTotal: number;
   droppedWeeks: number[]; // week numbers dropped
-  bestTotal: number; // seasonTotal minus the 3 lowest complete-week totals
+  bestTotal: number; // seasonTotal minus the lowest complete-week totals
 };
 
-const WEEKS_TO_DROP = 3;
+const MAX_WEEKS_TO_DROP = 3;
+
+// How many of each player's lowest weeks are dropped, given how many of the
+// season's weeks have been fully graded: none through week 3, then one more
+// each week until the cap of 3.
+export function weeksToDrop(gradedWeekCount: number): number {
+  return Math.min(MAX_WEEKS_TO_DROP, Math.max(0, gradedWeekCount - 3));
+}
 
 export function computeSeasonStandings(
   weeks: WeekForStandings[],
@@ -111,30 +119,27 @@ export function computeSeasonStandings(
   const perWeek = weeks.map((w) => ({
     weekNumber: w.weekNumber,
     scores: computeWeekScores(w.games, w.picks),
+    // Completeness is a property of the week, not the player: someone who
+    // didn't submit that week still has a graded 0, which they can drop.
+    complete: w.games.length > 0 && w.games.every((g) => g.status === "FINAL"),
   }));
+  const dropCount = weeksToDrop(perWeek.filter((w) => w.complete).length);
 
   return playerIds.map((playerId) => {
-    const weeklyTotals = perWeek.map(({ weekNumber, scores }) => {
-      const r = scores.get(playerId);
-      return { weekNumber, points: r?.points ?? 0, complete: r?.complete ?? false };
-    });
+    const weeklyTotals = perWeek.map(({ weekNumber, scores, complete }) => ({
+      weekNumber,
+      points: scores.get(playerId)?.points ?? 0,
+      complete,
+    }));
 
     const seasonTotal = weeklyTotals.reduce((sum, w) => sum + w.points, 0);
 
-    const completeWeeks = weeklyTotals.filter((w) => w.complete);
-    let droppedWeeks: number[] = [];
-    let bestTotal = seasonTotal;
-
-    // Only start dropping weeks once there's enough season to make it
-    // meaningful — otherwise an early 0-point bye week would tank a total
-    // that's really "not enough data yet".
-    if (completeWeeks.length > WEEKS_TO_DROP) {
-      const lowest = [...completeWeeks]
-        .sort((a, b) => a.points - b.points)
-        .slice(0, WEEKS_TO_DROP);
-      droppedWeeks = lowest.map((w) => w.weekNumber);
-      bestTotal = seasonTotal - lowest.reduce((sum, w) => sum + w.points, 0);
-    }
+    const lowest = weeklyTotals
+      .filter((w) => w.complete)
+      .sort((a, b) => a.points - b.points || a.weekNumber - b.weekNumber)
+      .slice(0, dropCount);
+    const droppedWeeks = lowest.map((w) => w.weekNumber);
+    const bestTotal = seasonTotal - lowest.reduce((sum, w) => sum + w.points, 0);
 
     return { playerId, weeklyTotals, seasonTotal, droppedWeeks, bestTotal };
   });
@@ -165,7 +170,7 @@ export function formatRank(r: { rank: number; tied: boolean }): string {
 }
 
 // Sorts by bestTotal (the number that actually determines standings — equal
-// to seasonTotal until the drop-lowest-3 rule kicks in), using seasonTotal
+// to seasonTotal until weeks start being dropped), using seasonTotal
 // only to keep display order stable when bestTotal ties. Players tied on
 // bestTotal share a rank via assignRanks.
 export function rankStandings(standings: SeasonStanding[]): RankedStanding[] {

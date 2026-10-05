@@ -84,7 +84,8 @@ export async function buildResultsEmail(weekId: string) {
       playerIds,
     ),
   );
-  const showDrop = standings.some((s) => s.droppedWeeks.length > 0);
+  const dropCount = Math.max(0, ...standings.map((s) => s.droppedWeeks.length));
+  const showDrop = dropCount > 0;
 
   // Named by player, never by email — this goes out to the whole family, and
   // a login's email address is private even when the login itself isn't.
@@ -130,7 +131,7 @@ export async function buildResultsEmail(weekId: string) {
 
       <h3 style="margin:22px 0 6px;">Season standings</h3>
       ${table(
-        showDrop ? ["#", "Player", "Total", "Best (drop 3)"] : ["#", "Player", "Total"],
+        showDrop ? ["#", "Player", "Total", `Best (drop ${dropCount})`] : ["#", "Player", "Total"],
         standings.map((s) =>
           showDrop
             ? [formatRank(s), name(s.playerId), String(s.seasonTotal), `<strong>${s.bestTotal}</strong>`]

@@ -49,7 +49,8 @@ export default async function StandingsPage() {
     ),
   );
 
-  const showDrop = standings.some((s) => s.droppedWeeks.length > 0);
+  const dropCount = Math.max(0, ...standings.map((s) => s.droppedWeeks.length));
+  const showDrop = dropCount > 0;
 
   return (
     <div>
@@ -70,7 +71,7 @@ export default async function StandingsPage() {
                 ))}
                 <th className="py-3 px-3 text-right font-semibold">Total</th>
                 {showDrop && (
-                  <th className="py-3 pl-3 pr-4 text-right font-semibold">Best (drop 3)</th>
+                  <th className="py-3 pl-3 pr-4 text-right font-semibold">Best (drop {dropCount})</th>
                 )}
               </tr>
             </thead>
@@ -119,8 +120,8 @@ export default async function StandingsPage() {
       </div>
       {showDrop && (
         <p className="text-xs text-muted mt-2">
-          Struck-through weeks are each player&apos;s 3 lowest scores, dropped from
-          their &quot;Best&quot; total.
+          Struck-through weeks are each player&apos;s {dropCount} lowest{" "}
+          {dropCount === 1 ? "score" : "scores"}, dropped from their &quot;Best&quot; total.
         </p>
       )}
     </div>
