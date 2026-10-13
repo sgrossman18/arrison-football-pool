@@ -104,7 +104,13 @@ export default async function PicksPage({
         )}
       </h1>
       <WeekIntro markdown={week.introMarkdown} />
-      {openDeadlineNote && <p className="text-sm text-muted mb-4">{openDeadlineNote}</p>}
+      {openDeadlineNote && <p className="text-sm text-muted mb-2">{openDeadlineNote}</p>}
+      {allowed && (
+        <p className="text-sm font-bold mb-4">
+          You must click the &quot;Save Picks&quot; button for your picks to be submitted this
+          week.
+        </p>
+      )}
 
       <PicksForm
         key={activePlayer.id}

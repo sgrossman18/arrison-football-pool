@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { NFL_TEAMS, teamName } from "@/lib/teams";
 
 export type PicksFormGame = {
@@ -54,31 +54,57 @@ export default function PicksForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const n = games.length;
   const confidenceOptions = Array.from({ length: n }, (_, i) => i + 1);
   const usedConfidences = new Set(Object.values(confByGame));
 
+  function isComplete(teams: Record<string, string>, confs: Record<string, number>) {
+    return (
+      n > 0 &&
+      games.every((g) => teams[g.id] && confs[g.id]) &&
+      new Set(games.map((g) => confs[g.id])).size === n
+    );
+  }
+
+  // Offer to submit the moment a pick turns the set from incomplete to
+  // complete — not on every later tweak, which would nag people editing
+  // already-saved picks.
+  function maybePromptToSubmit(
+    nextTeams: Record<string, string>,
+    nextConfs: Record<string, number>,
+  ) {
+    if (!isComplete(teamByGame, confByGame) && isComplete(nextTeams, nextConfs)) {
+      setShowConfirm(true);
+    }
+  }
+
   function pickTeam(gameId: string, team: string) {
     setSuccess(false);
-    setTeamByGame((prev) => ({ ...prev, [gameId]: team }));
+    const next = { ...teamByGame, [gameId]: team };
+    setTeamByGame(next);
+    maybePromptToSubmit(next, confByGame);
   }
 
   function pickConfidence(gameId: string, value: number) {
     setSuccess(false);
-    setConfByGame((prev) => {
-      const next = { ...prev };
-      // Keep confidence values unique: whoever else had this value loses it.
-      for (const [gid, v] of Object.entries(next)) {
-        if (v === value && gid !== gameId) delete next[gid];
-      }
-      next[gameId] = value;
-      return next;
-    });
+    const next = { ...confByGame };
+    // Keep confidence values unique: whoever else had this value loses it.
+    for (const [gid, v] of Object.entries(next)) {
+      if (v === value && gid !== gameId) delete next[gid];
+    }
+    next[gameId] = value;
+    setConfByGame(next);
+    maybePromptToSubmit(teamByGame, next);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    save();
+  }
+
+  function save() {
     setError(null);
 
     const missingTeam = games.some((g) => !teamByGame[g.id]);
@@ -105,6 +131,7 @@ export default function PicksForm({
           confidence: confByGame[g.id],
         })),
       );
+      setShowConfirm(false);
       if (!result.ok) {
         setError(result.error ?? "Something went wrong. Try again.");
       } else {
@@ -227,11 +254,85 @@ export default function PicksForm({
         <button
           type="submit"
           disabled={isPending}
-          className="self-start rounded-full bg-accent text-white px-6 py-2.5 font-semibold shadow-md shadow-accent/20 hover:bg-accent-strong transition-colors disabled:opacity-60"
+          className="w-full sm:w-auto self-start rounded-full bg-accent text-white px-10 py-4 text-lg font-bold shadow-lg shadow-accent/25 hover:bg-accent-strong transition-colors disabled:opacity-60"
         >
-          {isPending ? "Saving..." : "Save picks"}
+          {isPending ? "Saving..." : "Save Picks"}
         </button>
       )}
+
+      {showConfirm && (
+        <ConfirmSubmitDialog
+          isPending={isPending}
+          onYes={save}
+          onNo={() => setShowConfirm(false)}
+        />
+      )}
     </form>
+  );
+}
+
+function ConfirmSubmitDialog({
+  isPending,
+  onYes,
+  onNo,
+}: {
+  isPending: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  const yesRef = useRef<HTMLButtonElement>(null);
+  const onNoRef = useRef(onNo);
+  useEffect(() => {
+    onNoRef.current = onNo;
+  });
+
+  useEffect(() => {
+    yesRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onNoRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      onClick={onNo}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-submit-title"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-2xl"
+      >
+        <h2 id="confirm-submit-title" className="text-xl font-extrabold tracking-tight">
+          Submit your picks?
+        </h2>
+        <p className="text-sm text-muted mt-2">
+          You can change and re-submit your picks any time up until kickoff on Sunday.
+        </p>
+        <div className="flex gap-3 mt-5">
+          <button
+            ref={yesRef}
+            type="button"
+            disabled={isPending}
+            onClick={onYes}
+            className="flex-1 rounded-full bg-accent text-white px-5 py-3 font-bold hover:bg-accent-strong transition-colors disabled:opacity-60"
+          >
+            {isPending ? "Saving..." : "Yes"}
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={onNo}
+            className="flex-1 rounded-full border-2 border-border px-5 py-3 font-bold hover:border-accent/50 transition-colors disabled:opacity-60"
+          >
+            No
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
