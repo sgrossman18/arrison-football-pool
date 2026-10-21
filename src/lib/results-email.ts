@@ -87,27 +87,6 @@ export async function buildResultsEmail(weekId: string) {
   const dropCount = Math.max(0, ...standings.map((s) => s.droppedWeeks.length));
   const showDrop = dropCount > 0;
 
-  // Named by player, never by email — this goes out to the whole family, and
-  // a login's email address is private even when the login itself isn't.
-  const cheatClicks = await prisma.cheatClick.findMany({
-    where: { weekId: thisWeek.id },
-    orderBy: { createdAt: "asc" },
-  });
-  const cheatUserIds = [...new Set(cheatClicks.map((c) => c.userId))];
-  const cheatPlayers = await prisma.player.findMany({ where: { ownerUserId: { in: cheatUserIds } } });
-  const playerNameByUserId = new Map<string, string>();
-  for (const p of cheatPlayers) {
-    if (!playerNameByUserId.has(p.ownerUserId)) playerNameByUserId.set(p.ownerUserId, p.name);
-  }
-  const offenders = [
-    ...new Set(
-      cheatUserIds
-        .map((id) => playerNameByUserId.get(id))
-        .filter((n): n is string => Boolean(n))
-        .map(escapeHtml),
-    ),
-  ];
-
   const weekWinners = weekRows.filter((r) => r.rank === 1);
   const leaders = standings.filter((s) => s.rank === 1);
   const siteUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -139,13 +118,6 @@ export async function buildResultsEmail(weekId: string) {
         ),
         2,
       )}
-
-      ${
-        offenders.length
-          ? `<h3 style="margin:22px 0 6px;">🚨 Who Tried to Cheat This Week</h3>
-             <p style="margin:0 0 6px;font-size:14px;">${offenders.join(", ")}</p>`
-          : ""
-      }
 
       <p style="margin-top:22px;">
         <a href="${siteUrl}/results?week=${week.weekNumber}" style="display:inline-block;padding:12px 20px;background:${GREEN};color:#fff;text-decoration:none;border-radius:6px;">See everyone's picks</a>

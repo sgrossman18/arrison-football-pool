@@ -22,6 +22,7 @@ model User {
   sessions      Session[]
   players       Player[]
   cheatClicks   CheatClick[]
+  eggSubmissions EggSubmission[]
 }
 
 // The actual pool participant/picker. Usually one Player per User, but a
@@ -102,6 +103,7 @@ model Week {
   games         Game[]
   lockOverrides LockOverride[]
   cheatClicks   CheatClick[]
+  eggSubmissions EggSubmission[]
 
   @@unique([seasonId, weekNumber])
 }
@@ -174,6 +176,19 @@ model CheatClick {
   // closing the tab, reported by a beacon fired on page unload. Null until
   // that beacon arrives (or forever, if they just leave the tab open).
   durationSeconds Int?
+
+  week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A guess at the easter egg hidden in a week's intro, submitted from the Egg
+// page and shown only to admins (on that week's results page) for grading.
+model EggSubmission {
+  id        String   @id @default(cuid())
+  weekId    String
+  userId    String
+  response  String
+  createdAt DateTime @default(now())
 
   week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

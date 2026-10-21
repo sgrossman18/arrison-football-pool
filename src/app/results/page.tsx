@@ -7,6 +7,7 @@ import { isWeekLocked } from "@/lib/locking";
 import { gameOutcome, pickPoints, computeWeekScores } from "@/lib/scoring";
 import { NFL_TEAMS, teamName } from "@/lib/teams";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
+import { formatEastern } from "@/lib/timezone";
 
 export default async function ResultsPage({
   searchParams,
@@ -74,6 +75,24 @@ export default async function ResultsPage({
       complete: scores.get(pl.id)?.complete ?? false,
     }))
     .sort((a, b) => b.total - a.total || a.player.name.localeCompare(b.player.name));
+
+  // Easter-egg guesses are for the admins to grade, so they're only fetched
+  // (and rendered) for admins.
+  const eggs = session.user.isAdmin
+    ? await prisma.eggSubmission.findMany({
+        where: { weekId: week.id },
+        include: { user: true },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const eggPlayers = await prisma.player.findMany({
+    where: { ownerUserId: { in: [...new Set(eggs.map((e) => e.userId))] } },
+    orderBy: { createdAt: "asc" },
+  });
+  const eggNameByUser = new Map<string, string>();
+  for (const pl of eggPlayers) {
+    if (!eggNameByUser.has(pl.ownerUserId)) eggNameByUser.set(pl.ownerUserId, pl.name);
+  }
 
   return (
     <div>
@@ -218,6 +237,34 @@ export default async function ResultsPage({
         </div>
       </div>
       <p className="text-xs text-muted mt-2">* Some games this week are still in progress.</p>
+
+      {session.user.isAdmin && (
+        <div className="mt-8">
+          <h2 className="text-xl font-extrabold tracking-tight mb-1">
+            🥚 Easter egg submissions
+            <span className="text-muted font-medium text-sm"> · admins only</span>
+          </h2>
+          {eggs.length === 0 ? (
+            <p className="text-sm text-muted">No submissions for Week {week.weekNumber} yet.</p>
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden mt-3">
+              {eggs.map((e, i) => (
+                <div key={e.id} className={`px-4 py-3 text-sm ${i > 0 ? "border-t border-border" : ""}`}>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="font-semibold">
+                      {eggNameByUser.get(e.userId) ?? e.user.name ?? e.user.email}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {e.user.email} · {formatEastern(e.createdAt)}
+                    </span>
+                  </div>
+                  <div className="mt-1 whitespace-pre-wrap break-words">{e.response}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
