@@ -1,7 +1,11 @@
 import { TEAM_ABBREVIATIONS, teamName } from "@/lib/teams";
 
-// TEAM_ABBREVIATIONS follows NFL_TEAMS' declaration order, which is
-// alphabetical by city (Arizona, Atlanta, Baltimore, Buffalo, ...).
+// Sorted by the name shown in the dropdown (49ers, Bears, Bengals, ...), not
+// by city, so what admins read is what they scan alphabetically.
+const ALPHABETICAL_BY_NAME = [...TEAM_ABBREVIATIONS].sort((a, b) =>
+  teamName(a).localeCompare(teamName(b)),
+);
+
 export default function TeamSelect({
   name,
   defaultValue,
@@ -18,7 +22,7 @@ export default function TeamSelect({
       <option value="" disabled>
         {placeholder ?? "Team"}
       </option>
-      {TEAM_ABBREVIATIONS.map((abbr) => (
+      {ALPHABETICAL_BY_NAME.map((abbr) => (
         <option key={abbr} value={abbr}>
           {teamName(abbr)}
         </option>
