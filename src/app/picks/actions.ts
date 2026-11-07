@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canSubmitPicks } from "@/lib/locking";
+import { editableGames } from "@/lib/locking";
+import { validatePickSubmission } from "@/lib/pick-validation";
 import { revalidatePath } from "next/cache";
 
 export async function submitPicks(
@@ -24,33 +25,20 @@ export async function submitPicks(
   });
   if (!week) return { ok: false, error: "Week not found." };
 
-  const allowed = canSubmitPicks(
-    { locksAt: week.locksAt, gameKickoffs: week.games.map((g) => g.kickoff) },
-    week.lockOverrides.map((o) => ({ playerId: o.playerId, expiresAt: o.expiresAt })),
-    playerId,
-  );
-  if (!allowed) {
-    return { ok: false, error: "Picks are locked for this week." };
-  }
+  const weekLock = { locksAt: week.locksAt, gameKickoffs: week.games.map((g) => g.kickoff) };
+  const overrides = week.lockOverrides.map((o) => ({ playerId: o.playerId, expiresAt: o.expiresAt }));
+  const editable = editableGames(week.games, weekLock, overrides, playerId);
+  const editableGameIds = new Set(editable.map((g) => g.id));
 
-  const gameIds = new Set(week.games.map((g) => g.id));
-  if (picks.length !== week.games.length) {
-    return { ok: false, error: "You must pick every game." };
-  }
-  for (const p of picks) {
-    if (!gameIds.has(p.gameId)) return { ok: false, error: "Invalid game." };
-    const game = week.games.find((g) => g.id === p.gameId)!;
-    if (p.pickedTeam !== game.homeTeam && p.pickedTeam !== game.awayTeam) {
-      return { ok: false, error: "Invalid team pick." };
-    }
-    if (p.confidence < 1 || p.confidence > week.games.length) {
-      return { ok: false, error: "Invalid confidence value." };
-    }
-  }
-  const confidences = picks.map((p) => p.confidence);
-  if (new Set(confidences).size !== confidences.length) {
-    return { ok: false, error: "Confidence values must be unique." };
-  }
+  // Picks on games that already locked stay as they were, and the confidence
+  // numbers they used can't be reused on games that are still open.
+  const existing = await prisma.pick.findMany({
+    where: { playerId, gameId: { in: week.games.map((g) => g.id) } },
+  });
+  const lockedPicks = existing.filter((p) => !editableGameIds.has(p.gameId));
+
+  const check = validatePickSubmission({ games: week.games, editableGameIds, lockedPicks, picks });
+  if (!check.ok) return { ok: false, error: check.error };
 
   await prisma.$transaction(
     picks.map((p) =>

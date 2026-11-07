@@ -5,7 +5,8 @@
 //    nobody is "wrong" on a tie.
 //  - Season standings drop each player's lowest weekly totals on a phased
 //    schedule: 1 dropped once 4 weeks are fully graded, 2 after 5, and 3 from
-//    week 6 on (see weeksToDrop / computeSeasonStandings).
+//    week 6 on (see weeksToDrop / computeSeasonStandings). Bigger weeks (more
+//    than 5 games, like Thanksgiving) pay more points and can't be dropped.
 //
 // "Player" here means a pool participant/picker, not a login — one login
 // (User) can own several Players (e.g. a parent submitting for their kids).
@@ -97,13 +98,21 @@ export type WeekForStandings = {
 
 export type SeasonStanding = {
   playerId: string;
-  weeklyTotals: { weekNumber: number; points: number; complete: boolean }[];
+  weeklyTotals: { weekNumber: number; points: number; complete: boolean; droppable: boolean }[];
   seasonTotal: number;
   droppedWeeks: number[]; // week numbers dropped
-  bestTotal: number; // seasonTotal minus the lowest complete-week totals
+  bestTotal: number; // seasonTotal minus the lowest droppable, complete-week totals
 };
 
 const MAX_WEEKS_TO_DROP = 3;
+
+// A normal week is 5 games. Weeks with more than that are "bonus" weeks:
+// they award more points and are undroppable in the season standings.
+export const STANDARD_GAME_COUNT = 5;
+
+export function isDroppableWeek(gameCount: number): boolean {
+  return gameCount <= STANDARD_GAME_COUNT;
+}
 
 // How many of each player's lowest weeks are dropped, given how many of the
 // season's weeks have been fully graded: none through week 3, then one more
@@ -122,20 +131,22 @@ export function computeSeasonStandings(
     // Completeness is a property of the week, not the player: someone who
     // didn't submit that week still has a graded 0, which they can drop.
     complete: w.games.length > 0 && w.games.every((g) => g.status === "FINAL"),
+    droppable: isDroppableWeek(w.games.length),
   }));
   const dropCount = weeksToDrop(perWeek.filter((w) => w.complete).length);
 
   return playerIds.map((playerId) => {
-    const weeklyTotals = perWeek.map(({ weekNumber, scores, complete }) => ({
+    const weeklyTotals = perWeek.map(({ weekNumber, scores, complete, droppable }) => ({
       weekNumber,
       points: scores.get(playerId)?.points ?? 0,
       complete,
+      droppable,
     }));
 
     const seasonTotal = weeklyTotals.reduce((sum, w) => sum + w.points, 0);
 
     const lowest = weeklyTotals
-      .filter((w) => w.complete)
+      .filter((w) => w.complete && w.droppable)
       .sort((a, b) => a.points - b.points || a.weekNumber - b.weekNumber)
       .slice(0, dropCount);
     const droppedWeeks = lowest.map((w) => w.weekNumber);

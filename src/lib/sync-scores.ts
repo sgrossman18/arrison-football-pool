@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { fetchWeekScoreboard } from "@/lib/espn";
-import { isWeekLocked } from "@/lib/locking";
+import { firstLockTime } from "@/lib/locking";
 
 // Opportunistic freshness: results/standings pages call this before
 // rendering so scores update the moment someone actually looks, without
@@ -34,14 +34,14 @@ export async function syncAllActiveWeeks() {
   const errors: string[] = [];
 
   for (const week of weeks) {
-    // No point polling ESPN before picks have even locked — games don't
-    // track individual kickoff times anymore (the whole week shares one
-    // deadline), so the deadline itself is the "has this week started" signal.
-    const started = isWeekLocked({
+    // No point polling ESPN before the week's first game has locked — that
+    // lock (the earliest of the per-game locks and the main deadline) is the
+    // "has this week started" signal.
+    const first = firstLockTime(week.games, {
       locksAt: week.locksAt,
       gameKickoffs: week.games.map((g) => g.kickoff),
     });
-    if (!started) continue;
+    if (!first || Date.now() < first.getTime()) continue;
 
     try {
       const espnGames = await fetchWeekScoreboard(week.season.year, week.weekNumber);

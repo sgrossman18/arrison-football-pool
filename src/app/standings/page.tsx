@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getOrCreateCurrentSeason } from "@/lib/season";
-import { computeSeasonStandings, rankStandings } from "@/lib/scoring";
+import { computeSeasonStandings, isDroppableWeek, rankStandings } from "@/lib/scoring";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -67,6 +67,9 @@ export default async function StandingsPage() {
                 {weeks.map((w) => (
                   <th key={w.id} className="py-3 px-2 text-xs font-medium">
                     Wk{w.weekNumber}
+                    {!isDroppableWeek(w.games.length) && (
+                      <span title="More than 5 games — can't be dropped"> ★</span>
+                    )}
                   </th>
                 ))}
                 <th className="py-3 px-3 text-right font-semibold">Total</th>
@@ -118,6 +121,11 @@ export default async function StandingsPage() {
           </table>
         </div>
       </div>
+      {weeks.some((w) => !isDroppableWeek(w.games.length)) && (
+        <p className="text-xs text-muted mt-2">
+          ★ Weeks with more than 5 games count extra and can&apos;t be dropped.
+        </p>
+      )}
       {showDrop && (
         <p className="text-xs text-muted mt-2">
           Struck-through weeks are each player&apos;s {dropCount} lowest{" "}

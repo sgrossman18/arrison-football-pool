@@ -4,12 +4,12 @@ import { auth } from "@/lib/auth";
 import { getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
 import { prisma } from "@/lib/db";
 import {
-  canSubmitPicks,
   effectiveLockTime,
+  gameLockTime,
   hasActiveOverride,
-  isWeekLocked,
+  isGameLocked,
 } from "@/lib/locking";
-import { formatEastern } from "@/lib/timezone";
+import { formatEastern, formatEasternWeekday } from "@/lib/timezone";
 import WeekIntro from "@/components/WeekIntro";
 import PicksForm from "@/components/PicksForm";
 import { submitPicks } from "./actions";
@@ -61,21 +61,51 @@ export default async function PicksPage({
     playerId: o.playerId,
     expiresAt: o.expiresAt,
   }));
-  const allowed = canSubmitPicks(weekLockInfo, overrides, activePlayer.id);
-  const lockTime = effectiveLockTime(weekLockInfo);
-  const locked = isWeekLocked(weekLockInfo);
-  const overridden = locked && hasActiveOverride(overrides, activePlayer.id);
+  const weekLock = effectiveLockTime(weekLockInfo);
+  const overridden = hasActiveOverride(overrides, activePlayer.id);
 
-  const lockMessage = overridden
-    ? "This week is normally locked, but you've been given an exception — go ahead and submit."
-    : locked && lockTime
-      ? `Picks locked at ${formatEastern(lockTime)}.`
-      : undefined;
+  // Each game locks at its own time (or the week's main deadline). Locked
+  // games stay visible but read-only, and the confidence numbers on them are
+  // spent for the rest of the week.
+  const gameStates = week.games.map((g) => {
+    const lockTime = gameLockTime(g, weekLockInfo);
+    return { game: g, lockTime, locked: !overridden && isGameLocked(g, weekLockInfo) };
+  });
+  const openStates = gameStates.filter((s) => !s.locked);
+  const allowed = openStates.length > 0;
+  const distinctLocks = new Set(gameStates.map((s) => s.lockTime?.getTime() ?? null));
+  const staged = distinctLocks.size > 1;
+  const weekFullyLocked = !allowed;
+  const someLocked = gameStates.some((s) => s.locked);
 
-  const openDeadlineNote =
-    allowed && !locked && lockTime
-      ? `You can change these picks as many times as you want until ${formatEastern(lockTime)}.`
-      : undefined;
+  const lockMessage =
+    overridden && gameStates.some((s) => isGameLocked(s.game, weekLockInfo))
+      ? "Some of this week's games have locked, but you've been given an exception — go ahead and submit."
+      : weekFullyLocked && weekLock
+        ? `Picks locked at ${formatEastern(weekLock)}.`
+        : allowed && someLocked
+          ? "Some games have already locked (marked below). Their picks and the confidence numbers on them are final — use your remaining numbers on the games still open."
+          : undefined;
+
+  const firstOpenLock = openStates
+    .map((s) => s.lockTime)
+    .filter((t): t is Date => t !== null)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+
+  const openDeadlineNote = !allowed
+    ? undefined
+    : staged
+      ? "Games lock at different times this week — the deadline for each game is shown below. You can change a pick as many times as you want until its game locks."
+      : firstOpenLock
+        ? `You can change these picks as many times as you want until ${formatEastern(firstOpenLock)}.`
+        : undefined;
+
+  // For the "Submit your picks?" popup.
+  const deadlinePhrase = staged
+    ? "each game's deadline"
+    : firstOpenLock
+      ? `kickoff on ${formatEasternWeekday(firstOpenLock)}`
+      : "the deadline";
 
   return (
     <div>
@@ -114,11 +144,17 @@ export default async function PicksPage({
 
       <PicksForm
         key={activePlayer.id}
-        games={week.games.map((g) => ({
+        games={gameStates.map(({ game: g, lockTime, locked }) => ({
           id: g.id,
           homeTeam: g.homeTeam,
           awayTeam: g.awayTeam,
           kickoff: g.kickoff.toISOString(),
+          locked,
+          lockLabel: locked
+            ? "Locked"
+            : staged && lockTime
+              ? `Locks ${formatEastern(lockTime)}`
+              : undefined,
         }))}
         initialPicks={existingPicks.map((p) => ({
           gameId: p.gameId,
@@ -127,6 +163,7 @@ export default async function PicksPage({
         }))}
         canSubmit={allowed}
         lockMessage={lockMessage}
+        deadlinePhrase={deadlinePhrase}
         submitAction={submitPicks.bind(null, week.id, activePlayer.id)}
       />
     </div>

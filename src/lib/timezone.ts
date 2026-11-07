@@ -86,6 +86,11 @@ export function utcToEasternDatetimeLocal(date: Date): string {
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
+// "Sunday", "Thursday" — the weekday in Eastern time.
+export function formatEasternWeekday(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "long" }).format(date);
+}
+
 export const DEADLINE_TIME_ET = "1:00 PM ET";
 
 // The pool's picks deadline is always 1:00 PM Eastern on a single date the

@@ -109,12 +109,16 @@ export function pickReminderEmail({
   weekNumber,
   playerNames,
   deadlineText,
+  partialWeek = false,
   siteUrl,
 }: {
   to: string;
   weekNumber: number;
   playerNames: string[];
   deadlineText: string | null;
+  // True when the week's games lock at different times, so this reminder is
+  // about just the games locking next.
+  partialWeek?: boolean;
   siteUrl: string;
 }): OutgoingEmail {
   playerNames = playerNames.map(escapeHtml);
@@ -129,7 +133,11 @@ export function pickReminderEmail({
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2>🏈 Week ${weekNumber} picks reminder</h2>
-        <p>${who} submitted picks for Week ${weekNumber} yet${deadlineText ? `. Picks lock ${deadlineText}` : ""}.</p>
+        <p>${
+          partialWeek
+            ? `${who} picked the Week ${weekNumber} games that lock ${deadlineText ?? "soon"} yet. The rest of the week's games lock later.`
+            : `${who} submitted picks for Week ${weekNumber} yet${deadlineText ? `. Picks lock ${deadlineText}` : ""}.`
+        }</p>
         <p>
           <a href="${siteUrl}/picks" style="display:inline-block;padding:12px 20px;background:#1a5d3a;color:#fff;text-decoration:none;border-radius:6px;">
             Make your picks

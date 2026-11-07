@@ -153,10 +153,12 @@ fine — only the drag-and-drop/file-picker upload needs the Blob store.
 ## Scheduled jobs (score syncs + Tuesday results email)
 
 Vercel's free plan only runs two once-a-day crons (`vercel.json`: a daily score
-sync and the Saturday/Sunday pick reminders), so the rest is scheduled with
+sync and the daily pick reminders, which only send when a pick deadline is within 36 hours), so the rest is scheduled with
 GitHub Actions in `.github/workflows/scheduled-jobs.yml`:
 
-- Score syncs: Sun 4:00 PM, 8:30 PM, 11:30 PM ET; Mon 9:00 AM and 11:30 PM ET.
+- Score syncs: Sun 4:00 PM, 8:30 PM, 11:30 PM ET; Mon 9:00 AM and 11:30 PM ET; and
+  Thu/Fri/Sat 4:00 PM, 8:00 PM, 11:30 PM ET for Thanksgiving, Christmas and Saturday
+  games (they do nothing until a week's first game has locked).
 - Tuesday ~7:00 AM ET: emails everyone the week's results and season standings
   (once per week — stamped in the database).
 

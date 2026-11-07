@@ -2,12 +2,18 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
 import TeamSelect from "@/components/TeamSelect";
-import { utcToEasternDateOnly, formatEastern, DEADLINE_TIME_ET } from "@/lib/timezone";
+import {
+  utcToEasternDateOnly,
+  utcToEasternDatetimeLocal,
+  formatEastern,
+  DEADLINE_TIME_ET,
+} from "@/lib/timezone";
 import IntroEditor from "@/components/IntroEditor";
 import RemindersButton from "@/components/RemindersButton";
 import DeleteWeekButton from "@/components/DeleteWeekButton";
 import SendResultsButton from "@/components/SendResultsButton";
 import SortGamesButton from "@/components/SortGamesButton";
+import SetLocksButton from "@/components/SetLocksButton";
 import {
   addGame,
   updateGame,
@@ -79,9 +85,10 @@ export default async function WeekEditorPage({
       <section>
         <h2 className="text-lg font-bold mb-3">Deadline</h2>
         <p className="text-sm text-muted mb-3">
-          Every pick this week is due at the same time — {DEADLINE_TIME_ET}
-          {week.locksAt ? `, currently ${formatEastern(week.locksAt)}` : ""}. Set the date below;
-          the time is always {DEADLINE_TIME_ET}.
+          The week&apos;s main deadline — {DEADLINE_TIME_ET}
+          {week.locksAt ? `, currently ${formatEastern(week.locksAt)}` : ""}. Every game locks
+          then unless it has its own earlier lock time (set per game below, for Thanksgiving,
+          Friday and Saturday games). Set the date here; the time is always {DEADLINE_TIME_ET}.
         </p>
         <form
           action={async (formData: FormData) => {
@@ -239,6 +246,14 @@ export default async function WeekEditorPage({
           This is the order everyone sees. Use the arrows to reorder, or sort by game time to
           line them up chronologically.
         </p>
+        <div className="mb-3">
+          <p className="text-sm text-muted mb-2">
+            Picks lock at the week deadline, except games with their own lock time below. Once a
+            game locks, its pick and the confidence number on it are final. Weeks with more than
+            5 games can&apos;t be dropped in the season standings.
+          </p>
+          {week.games.length > 0 && <SetLocksButton weekId={week.id} />}
+        </div>
         <div className="flex flex-col gap-3">
           {week.games.map((g, idx) => (
             <form
@@ -248,6 +263,7 @@ export default async function WeekEditorPage({
                 await updateGame(g.id, week.id, {
                   homeTeam: String(formData.get("homeTeam")),
                   awayTeam: String(formData.get("awayTeam")),
+                  locksAt: String(formData.get("locksAt") ?? ""),
                 });
               }}
               className="rounded-2xl border border-border bg-surface shadow-sm p-4 flex items-center gap-3 flex-wrap"
@@ -283,6 +299,16 @@ export default async function WeekEditorPage({
               <TeamSelect name="awayTeam" defaultValue={g.awayTeam} className={INPUT} />
               <span className="text-muted">@</span>
               <TeamSelect name="homeTeam" defaultValue={g.homeTeam} className={INPUT} />
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                Locks
+                <input
+                  type="datetime-local"
+                  name="locksAt"
+                  defaultValue={g.locksAt ? utcToEasternDatetimeLocal(g.locksAt) : ""}
+                  className={INPUT}
+                />
+                <span>{g.locksAt ? "ET" : "(week deadline)"}</span>
+              </label>
               <button type="submit" className={BTN_PRIMARY}>
                 Save
               </button>

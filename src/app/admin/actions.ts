@@ -6,12 +6,15 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { getOrCreateCurrentSeason } from "@/lib/season";
 import {
+  easternDatetimeLocalToUtc,
+  formatEastern,
   easternDateAt1pmToUtc,
   utcToEasternDateOnly,
   addDaysToDateOnly,
   nextEasternSundayDateOnly,
 } from "@/lib/timezone";
 import { effectiveLockTime } from "@/lib/locking";
+import { computeGameLocks } from "@/lib/lock-schedule";
 
 export async function createNextWeek() {
   await requireAdmin();
@@ -95,7 +98,7 @@ export async function addGame(weekId: string, data: { homeTeam: string; awayTeam
 export async function updateGame(
   gameId: string,
   weekId: string,
-  data: { homeTeam: string; awayTeam: string },
+  data: { homeTeam: string; awayTeam: string; locksAt?: string | null },
 ) {
   await requireAdmin();
 
@@ -108,6 +111,11 @@ export async function updateGame(
     data: {
       homeTeam: data.homeTeam,
       awayTeam: data.awayTeam,
+      // Blank = lock with the week's main deadline; otherwise a datetime-local
+      // string in Eastern time for games that must lock earlier.
+      ...(data.locksAt !== undefined && {
+        locksAt: data.locksAt ? easternDatetimeLocalToUtc(data.locksAt) : null,
+      }),
       // A changed matchup invalidates any scores already pulled in for it.
       ...(matchupChanged && { status: "SCHEDULED", homeScore: null, awayScore: null, espnEventId: null }),
     },
@@ -338,23 +346,9 @@ export async function sortWeekByGameTime(weekId: string) {
   });
   if (!week) return { ok: false, error: "Week not found." };
 
-  let espnGames;
-  try {
-    const { fetchWeekScoreboard } = await import("@/lib/espn");
-    espnGames = await fetchWeekScoreboard(week.season.year, week.weekNumber);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't reach ESPN's schedule." };
-  }
-
-  const startById = new Map<string, Date>();
-  for (const game of week.games) {
-    const match = espnGames.find(
-      (e) =>
-        (e.homeTeam === game.homeTeam && e.awayTeam === game.awayTeam) ||
-        (e.homeTeam === game.awayTeam && e.awayTeam === game.homeTeam),
-    );
-    if (match) startById.set(game.id, new Date(match.kickoff));
-  }
+  const matched = await matchEspnStartTimes(week);
+  if ("error" in matched) return { ok: false, error: matched.error };
+  const { startById } = matched;
 
   const ordered = week.games
     .map((g, index) => ({ id: g.id, index, start: startById.get(g.id) ?? null }))
@@ -378,4 +372,72 @@ export async function sortWeekByGameTime(weekId: string) {
   revalidatePath("/picks");
   revalidatePath("/results");
   return { ok: true, matched: startById.size, total: week.games.length };
+}
+
+// Looks each of the week's games up on ESPN's schedule and returns its real
+// start time (games ESPN can't match are simply absent from the map).
+async function matchEspnStartTimes(week: {
+  weekNumber: number;
+  season: { year: number };
+  games: { id: string; homeTeam: string; awayTeam: string }[];
+}): Promise<{ startById: Map<string, Date> } | { error: string }> {
+  let espnGames;
+  try {
+    const { fetchWeekScoreboard } = await import("@/lib/espn");
+    espnGames = await fetchWeekScoreboard(week.season.year, week.weekNumber);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't reach ESPN's schedule." };
+  }
+
+  const startById = new Map<string, Date>();
+  for (const game of week.games) {
+    const match = espnGames.find(
+      (e) =>
+        (e.homeTeam === game.homeTeam && e.awayTeam === game.awayTeam) ||
+        (e.homeTeam === game.awayTeam && e.awayTeam === game.homeTeam),
+    );
+    if (match) startById.set(game.id, new Date(match.kickoff));
+  }
+  return { startById };
+}
+
+// Sets each game's own lock time from ESPN's real start times: Thursday,
+// Friday and Saturday games lock together per day at that day's first
+// kickoff; Sunday and Monday games lock with the week's main deadline.
+export async function setLocksFromSchedule(weekId: string) {
+  await requireAdmin();
+  const week = await prisma.week.findUnique({
+    where: { id: weekId },
+    include: { season: true, games: true },
+  });
+  if (!week) return { ok: false as const, error: "Week not found." };
+
+  const matched = await matchEspnStartTimes(week);
+  if ("error" in matched) return { ok: false as const, error: matched.error };
+  const { startById } = matched;
+
+  const locks = computeGameLocks(week.games.map((g) => ({ id: g.id, start: startById.get(g.id) ?? null })));
+  await prisma.$transaction(
+    week.games
+      .filter((g) => startById.has(g.id))
+      .map((g) =>
+        prisma.game.update({
+          where: { id: g.id },
+          data: { startTime: startById.get(g.id), locksAt: locks.get(g.id) ?? null },
+        }),
+      ),
+  );
+
+  const counts = new Map<number, number>();
+  for (const lock of locks.values()) {
+    if (lock) counts.set(lock.getTime(), (counts.get(lock.getTime()) ?? 0) + 1);
+  }
+  const early = [...counts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([t, n]) => `${n} game${n === 1 ? "" : "s"} lock ${formatEastern(new Date(t))}`);
+
+  revalidatePath(`/admin/weeks/${weekId}`);
+  revalidatePath("/picks");
+  revalidatePath("/results");
+  return { ok: true as const, matched: startById.size, total: week.games.length, early };
 }

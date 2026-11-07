@@ -125,6 +125,10 @@ model Game {
   espnEventId  String?
   homeScore    Int?
   awayScore    Int?
+  // When picks for this game lock. Null means it locks with the week's main
+  // deadline (Week.locksAt); set for games that must lock earlier, like
+  // Thanksgiving, Friday and Saturday games.
+  locksAt      DateTime?
   // SCHEDULED | IN_PROGRESS | FINAL
   status       String    @default("SCHEDULED")
   updatedAt    DateTime  @updatedAt

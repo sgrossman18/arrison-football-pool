@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getOrCreateCurrentSeason } from "@/lib/season";
-import { isWeekLocked } from "@/lib/locking";
+import { isGameLocked } from "@/lib/locking";
 import { gameOutcome, pickPoints, computeWeekScores } from "@/lib/scoring";
 import { NFL_TEAMS, teamName } from "@/lib/teams";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
@@ -51,10 +51,14 @@ export default async function ResultsPage({
     include: { player: true },
   });
 
-  const locked = isWeekLocked({
-    locksAt: week.locksAt,
-    gameKickoffs: week.games.map((g) => g.kickoff),
-  });
+  // Other people's picks are hidden game by game: a game's picks open up the
+  // moment that game locks, not when the whole week does.
+  const weekLockInfo = { locksAt: week.locksAt, gameKickoffs: week.games.map((g) => g.kickoff) };
+  const lockedGameIds = new Set(
+    week.games.filter((g) => isGameLocked(g, weekLockInfo)).map((g) => g.id),
+  );
+  const anyLocked = lockedGameIds.size > 0;
+  const allLocked = lockedGameIds.size === week.games.length;
 
   const playerIds = [...new Set(picks.map((p) => p.playerId))];
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
@@ -115,9 +119,11 @@ export default async function ResultsPage({
         </div>
       </div>
 
-      {!locked && (
+      {!allLocked && (
         <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 px-4 py-3 text-sm font-medium mb-4">
-          Picks aren&apos;t locked yet — other people&apos;s picks are hidden until they are.
+          {anyLocked
+            ? "Other people's picks are hidden for games that haven't locked yet — they appear as each game locks."
+            : "Picks aren't locked yet — other people's picks are hidden until they are."}
         </div>
       )}
 
@@ -160,7 +166,7 @@ export default async function ResultsPage({
             <tbody>
               {rows.map(({ player, total, complete }, i) => {
                 const isMe = player.ownerUserId === session.user.id;
-                const visible = locked || isMe;
+                const totalVisible = anyLocked || isMe;
                 return (
                   <tr
                     key={player.id}
@@ -180,7 +186,7 @@ export default async function ResultsPage({
                             —
                           </td>
                         );
-                      if (!visible) {
+                      if (!isMe && !lockedGameIds.has(g.id)) {
                         return (
                           <td key={g.id} className="py-2.5 px-2 text-muted italic text-xs">
                             hidden
@@ -226,8 +232,8 @@ export default async function ResultsPage({
                       );
                     })}
                     <td className="py-2.5 pl-3 pr-4 text-right font-bold">
-                      {visible ? total : "—"}
-                      {visible && !complete && <span className="text-muted font-normal">*</span>}
+                      {totalVisible ? total : "—"}
+                      {totalVisible && !complete && <span className="text-muted font-normal">*</span>}
                     </td>
                   </tr>
                 );

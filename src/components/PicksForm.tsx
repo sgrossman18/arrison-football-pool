@@ -8,6 +8,8 @@ export type PicksFormGame = {
   homeTeam: string;
   awayTeam: string;
   kickoff: string; // ISO
+  locked?: boolean; // this game's lock time has passed for this player
+  lockLabel?: string; // e.g. "Locked" or "Locks Thu, Nov 26, 12:30 PM ET"
 };
 
 export type PicksFormInitialPick = {
@@ -32,12 +34,14 @@ export default function PicksForm({
   initialPicks,
   canSubmit,
   lockMessage,
+  deadlinePhrase,
   submitAction,
 }: {
   games: PicksFormGame[];
   initialPicks: PicksFormInitialPick[];
   canSubmit: boolean;
   lockMessage?: string;
+  deadlinePhrase: string;
   submitAction: (
     picks: { gameId: string; pickedTeam: string; confidence: number }[],
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -56,15 +60,21 @@ export default function PicksForm({
   const [isPending, startTransition] = useTransition();
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // Games that have locked keep their pick, and the confidence number they
+  // used is spent — only the open games are edited and submitted.
+  const openGames = games.filter((g) => !g.locked);
+  const lockedConfidences = new Set(
+    games.filter((g) => g.locked && confByGame[g.id]).map((g) => confByGame[g.id]),
+  );
   const n = games.length;
   const confidenceOptions = Array.from({ length: n }, (_, i) => i + 1);
   const usedConfidences = new Set(Object.values(confByGame));
 
   function isComplete(teams: Record<string, string>, confs: Record<string, number>) {
     return (
-      n > 0 &&
-      games.every((g) => teams[g.id] && confs[g.id]) &&
-      new Set(games.map((g) => confs[g.id])).size === n
+      openGames.length > 0 &&
+      openGames.every((g) => teams[g.id] && confs[g.id]) &&
+      new Set(openGames.map((g) => confs[g.id])).size === openGames.length
     );
   }
 
@@ -88,6 +98,7 @@ export default function PicksForm({
   }
 
   function pickConfidence(gameId: string, value: number) {
+    if (lockedConfidences.has(value)) return;
     setSuccess(false);
     const next = { ...confByGame };
     // Keep confidence values unique: whoever else had this value loses it.
@@ -107,25 +118,25 @@ export default function PicksForm({
   function save() {
     setError(null);
 
-    const missingTeam = games.some((g) => !teamByGame[g.id]);
+    const missingTeam = openGames.some((g) => !teamByGame[g.id]);
     if (missingTeam) {
-      setError("Pick a winner for every game.");
+      setError("Pick a winner for every open game.");
       return;
     }
-    const confidences = games.map((g) => confByGame[g.id]);
+    const confidences = openGames.map((g) => confByGame[g.id]);
     if (confidences.some((c) => !c)) {
-      setError("Set a confidence value (1-5) for every game.");
+      setError(`Set a confidence value (1-${n}) for every open game.`);
       return;
     }
     const unique = new Set(confidences);
-    if (unique.size !== n) {
+    if (unique.size !== openGames.length) {
       setError("Each confidence value can only be used once.");
       return;
     }
 
     startTransition(async () => {
       const result = await submitAction(
-        games.map((g) => ({
+        openGames.map((g) => ({
           gameId: g.id,
           pickedTeam: teamByGame[g.id],
           confidence: confByGame[g.id],
@@ -156,13 +167,23 @@ export default function PicksForm({
       {games.map((game) => {
         const picked = teamByGame[game.id];
         const confidence = confByGame[game.id];
+        const gameDisabled = !canSubmit || !!game.locked;
         return (
           <div
             key={game.id}
-            className="rounded-2xl border border-border bg-surface shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+            className={`rounded-2xl border border-border bg-surface shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 ${
+              game.locked ? "opacity-80" : ""
+            }`}
           >
             <div className="text-xs text-muted font-medium w-24 shrink-0">
               {game.awayTeam} @ {game.homeTeam}
+              {game.lockLabel && (
+                <div className={`mt-1 ${game.locked ? "font-semibold" : ""}`}>
+                  {game.locked ? "🔒 " : ""}
+                  {game.lockLabel}
+                </div>
+              )}
+              {game.locked && !picked && <div className="mt-1 italic">No pick</div>}
             </div>
 
             <div className="flex gap-2 flex-1">
@@ -173,7 +194,7 @@ export default function PicksForm({
                   <button
                     type="button"
                     key={team}
-                    disabled={!canSubmit}
+                    disabled={gameDisabled}
                     onClick={() => pickTeam(game.id, team)}
                     aria-pressed={isSelected}
                     style={
@@ -219,15 +240,18 @@ export default function PicksForm({
                 {confidenceOptions.map((v) => {
                   const isSelected = confidence === v;
                   const isTakenElsewhere = usedConfidences.has(v) && !isSelected;
+                  const isLockedElsewhere = lockedConfidences.has(v) && !isSelected;
                   return (
                     <button
                       type="button"
                       key={v}
-                      disabled={!canSubmit}
+                      disabled={gameDisabled || isLockedElsewhere}
                       onClick={() => pickConfidence(game.id, v)}
                       className={`h-8 w-8 rounded-full text-sm font-semibold border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                         isSelected
                           ? "bg-accent border-accent text-white shadow-sm"
+                          : isLockedElsewhere
+                            ? "border-border text-muted/40 line-through"
                           : isTakenElsewhere
                             ? "border-border text-muted/40"
                             : "border-border text-foreground hover:border-accent/50"
@@ -262,6 +286,7 @@ export default function PicksForm({
 
       {showConfirm && (
         <ConfirmSubmitDialog
+          deadlinePhrase={deadlinePhrase}
           isPending={isPending}
           onYes={save}
           onNo={() => setShowConfirm(false)}
@@ -272,10 +297,12 @@ export default function PicksForm({
 }
 
 function ConfirmSubmitDialog({
+  deadlinePhrase,
   isPending,
   onYes,
   onNo,
 }: {
+  deadlinePhrase: string;
   isPending: boolean;
   onYes: () => void;
   onNo: () => void;
@@ -311,7 +338,7 @@ function ConfirmSubmitDialog({
           Submit your picks?
         </h2>
         <p className="text-sm text-muted mt-2">
-          You can change and re-submit your picks any time up until kickoff on Sunday.
+          You can change and re-submit your picks any time up until {deadlinePhrase}.
         </p>
         <div className="flex gap-3 mt-5">
           <button
