@@ -1,10 +1,33 @@
 export type SubmissionGame = { id: string; homeTeam: string; awayTeam: string };
 export type SubmittedPick = { gameId: string; pickedTeam: string; confidence: number };
 
+// Confidence numbers that are no longer available once some games have
+// locked: the numbers on the picks made for those games ("used"), plus one
+// "burned" number for every locked game with no pick — always the largest
+// number still free, so skipping a game costs you your best numbers.
+export function spentConfidences(
+  totalGames: number,
+  lockedGameIds: string[],
+  picks: { gameId: string; confidence: number }[],
+): { used: number[]; burned: number[]; spent: Set<number> } {
+  const confByGame = new Map(picks.map((p) => [p.gameId, p.confidence]));
+  const used = lockedGameIds
+    .filter((id) => confByGame.has(id))
+    .map((id) => confByGame.get(id)!);
+  const missed = lockedGameIds.length - used.length;
+
+  const usedSet = new Set(used);
+  const burned: number[] = [];
+  for (let v = totalGames; v >= 1 && burned.length < missed; v--) {
+    if (!usedSet.has(v)) burned.push(v);
+  }
+  return { used, burned, spent: new Set([...used, ...burned]) };
+}
+
 // Checks a pick submission. `editableGameIds` are the games the player can
-// still change; `lockedPicks` are their existing picks on games that have
-// locked, whose confidence values are spent — a locked game's number can't
-// be reused on a game that's still open.
+// still change; `lockedPicks` are their existing picks on the games that have
+// locked. Numbers spent on locked games (picked or skipped — see
+// spentConfidences) can't be reused on games that are still open.
 export function validatePickSubmission({
   games,
   editableGameIds,
@@ -13,7 +36,7 @@ export function validatePickSubmission({
 }: {
   games: SubmissionGame[];
   editableGameIds: Set<string>;
-  lockedPicks: { confidence: number }[];
+  lockedPicks: { gameId: string; confidence: number }[];
   picks: SubmittedPick[];
 }): { ok: true } | { ok: false; error: string } {
   if (editableGameIds.size === 0) {
@@ -51,14 +74,17 @@ export function validatePickSubmission({
     }
   }
 
-  const confidences = [...picks.map((p) => p.confidence), ...lockedPicks.map((p) => p.confidence)];
+  const lockedGameIds = games.filter((g) => !editableGameIds.has(g.id)).map((g) => g.id);
+  const { spent } = spentConfidences(games.length, lockedGameIds, lockedPicks);
+  const confidences = picks.map((p) => p.confidence);
   if (new Set(confidences).size !== confidences.length) {
+    return { ok: false, error: "Confidence values must be unique." };
+  }
+  if (confidences.some((c) => spent.has(c))) {
     return {
       ok: false,
       error:
-        lockedPicks.length > 0
-          ? "Confidence values must be unique — numbers on games that already locked can't be reused."
-          : "Confidence values must be unique.",
+        "Some of those numbers are used up — games that already locked use theirs, and any locked game you didn't pick burns your largest free number.",
     };
   }
   return { ok: true };

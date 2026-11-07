@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { NFL_TEAMS, teamName } from "@/lib/teams";
+import { spentConfidences } from "@/lib/pick-validation";
 
 export type PicksFormGame = {
   id: string;
@@ -63,10 +64,17 @@ export default function PicksForm({
   // Games that have locked keep their pick, and the confidence number they
   // used is spent — only the open games are edited and submitted.
   const openGames = games.filter((g) => !g.locked);
-  const lockedConfidences = new Set(
-    games.filter((g) => g.locked && confByGame[g.id]).map((g) => confByGame[g.id]),
-  );
+  const lockedGames = games.filter((g) => g.locked);
   const n = games.length;
+  // Numbers on locked games are spent, and so is the largest free number for
+  // every locked game that has no pick.
+  const { burned, spent: lockedConfidences } = spentConfidences(
+    n,
+    lockedGames.map((g) => g.id),
+    lockedGames
+      .filter((g) => confByGame[g.id])
+      .map((g) => ({ gameId: g.id, confidence: confByGame[g.id] })),
+  );
   const confidenceOptions = Array.from({ length: n }, (_, i) => i + 1);
   const usedConfidences = new Set(Object.values(confByGame));
 
@@ -161,6 +169,14 @@ export default function PicksForm({
       {canSubmit && lockMessage && (
         <div className="rounded-xl bg-accent-soft text-accent-strong px-4 py-3 text-sm font-medium">
           {lockMessage}
+        </div>
+      )}
+
+      {burned.length > 0 && (
+        <div className="rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 px-4 py-3 text-sm font-medium">
+          You didn&apos;t pick {burned.length === 1 ? "a game" : `${burned.length} games`} that
+          already locked, so your largest free {burned.length === 1 ? "number" : "numbers"} (
+          {burned.join(", ")}) {burned.length === 1 ? "is" : "are"} used up.
         </div>
       )}
 

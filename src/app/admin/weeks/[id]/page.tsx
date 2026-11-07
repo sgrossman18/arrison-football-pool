@@ -249,7 +249,8 @@ export default async function WeekEditorPage({
         <div className="mb-3">
           <p className="text-sm text-muted mb-2">
             Picks lock at the week deadline, except games with their own lock time below. Once a
-            game locks, its pick and the confidence number on it are final. Weeks with more than
+            game locks, its pick and the confidence number on it are final, and each locked game a player
+            skipped burns their largest free number. Weeks with more than
             5 games can&apos;t be dropped in the season standings.
           </p>
           {week.games.length > 0 && <SetLocksButton weekId={week.id} />}
