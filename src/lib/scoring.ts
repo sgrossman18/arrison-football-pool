@@ -7,6 +7,8 @@
 //    schedule: 1 dropped once 4 weeks are fully graded, 2 after 5, and 3 from
 //    week 6 on (see weeksToDrop / computeSeasonStandings). Bigger weeks (more
 //    than 5 games, like Thanksgiving) pay more points and can't be dropped.
+//  - A week's points are held back from the season totals until every game in
+//    that week is final, so the standings only move once per week.
 //
 // "Player" here means a pool participant/picker, not a login — one login
 // (User) can own several Players (e.g. a parent submitting for their kids).
@@ -99,7 +101,7 @@ export type WeekForStandings = {
 export type SeasonStanding = {
   playerId: string;
   weeklyTotals: { weekNumber: number; points: number; complete: boolean; droppable: boolean }[];
-  seasonTotal: number;
+  seasonTotal: number; // sum of fully graded weeks only; in-progress weeks are held back
   droppedWeeks: number[]; // week numbers dropped
   bestTotal: number; // seasonTotal minus the lowest droppable, complete-week totals
 };
@@ -143,7 +145,11 @@ export function computeSeasonStandings(
       droppable,
     }));
 
-    const seasonTotal = weeklyTotals.reduce((sum, w) => sum + w.points, 0);
+    // A week still in progress shows its running points in the table but
+    // doesn't count toward the totals until every game in it is final.
+    const seasonTotal = weeklyTotals
+      .filter((w) => w.complete)
+      .reduce((sum, w) => sum + w.points, 0);
 
     const lowest = weeklyTotals
       .filter((w) => w.complete && w.droppable)

@@ -99,10 +99,13 @@ export default async function StandingsPage() {
                     {s.weeklyTotals.map((w) => (
                       <td
                         key={w.weekNumber}
+                        title={w.complete ? undefined : "Week in progress — not counted yet"}
                         className={`py-2.5 px-2 ${
                           s.droppedWeeks.includes(w.weekNumber)
                             ? "text-muted line-through"
-                            : ""
+                            : !w.complete
+                              ? "text-muted italic"
+                              : ""
                         }`}
                       >
                         {w.complete ? w.points : w.points || "-"}
@@ -121,6 +124,12 @@ export default async function StandingsPage() {
           </table>
         </div>
       </div>
+      {weeks.some((w) => w.games.some((g) => g.status !== "FINAL")) && (
+        <p className="text-xs text-muted mt-2">
+          Points for a week still in progress (shown in gray italics) don&apos;t count toward
+          the standings until every game that week is final.
+        </p>
+      )}
       {weeks.some((w) => !isDroppableWeek(w.games.length)) && (
         <p className="text-xs text-muted mt-2">
           ★ Weeks with more than 5 games count extra and can&apos;t be dropped.
