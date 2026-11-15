@@ -23,6 +23,7 @@ model User {
   players       Player[]
   cheatClicks   CheatClick[]
   eggSubmissions EggSubmission[]
+  apiTokens     ApiToken[]
 }
 
 // The actual pool participant/picker. Usually one Player per User, but a
@@ -196,4 +197,35 @@ model EggSubmission {
 
   week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Bearer tokens for the mobile app (/api/v1). Only the SHA-256 hash of the
+// token is stored. Minted by POST /api/v1/auth/verify-code.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  deviceName String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// One-time sign-in codes emailed to the mobile app (replaces the magic link).
+// Only an HMAC of the code is stored.
+model LoginCode {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
 }
