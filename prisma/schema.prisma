@@ -24,6 +24,7 @@ model User {
   cheatClicks   CheatClick[]
   eggSubmissions EggSubmission[]
   apiTokens     ApiToken[]
+  deviceTokens  DeviceToken[]
 }
 
 // The actual pool participant/picker. Usually one Player per User, but a
@@ -228,4 +229,20 @@ model LoginCode {
   createdAt  DateTime  @default(now())
 
   @@index([email, createdAt])
+}
+
+// An iPhone registered for push notifications (pick reminders, "results are
+// in"). `environment` is which APNs host the token belongs to: Xcode/dev builds
+// get sandbox tokens, TestFlight/App Store builds get production ones.
+model DeviceToken {
+  id          String   @id @default(cuid())
+  userId      String
+  apnsToken   String   @unique
+  environment String // sandbox | production
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

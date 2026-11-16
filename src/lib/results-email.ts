@@ -141,7 +141,7 @@ export async function sendResultsEmailForWeek(weekId: string, opts: { dryRun?: b
 
   const users = await prisma.user.findMany({
     where: { players: { some: {} } },
-    select: { email: true },
+    select: { id: true, email: true },
     orderBy: { email: "asc" },
   });
   const recipients = users.map((u) => u.email);
@@ -154,5 +154,13 @@ export async function sendResultsEmailForWeek(weekId: string, opts: { dryRun?: b
   }));
   await sendEmails(messages);
   await prisma.week.update({ where: { id: weekId }, data: { resultsEmailSentAt: new Date() } });
+
+  // Same moment, same people: a push notification to their phones.
+  const { sendPushToUsers } = await import("@/lib/push");
+  await sendPushToUsers(users.map((u) => u.id), {
+    title: `🏈 Week ${built.weekNumber} results are in`,
+    body: "See how you did and where you stand.",
+    data: { tab: "results", week: String(built.weekNumber) },
+  });
   return { sent: messages.length, recipients };
 }

@@ -91,7 +91,7 @@ async function main() {
 
   console.log("me / players");
   const me = await call("GET", "me", { token });
-  check("me returns user + 2 players", me.status === 200 && me.body.players.length === 2, me.body);
+  check("me returns user + their players (Tester, Kid first)", me.status === 200 && me.body.players.length >= 2 && me.body.players[0].name === "Tester" && me.body.players[1].name === "Kid", me.body);
   const [tester, kid] = me.body.players;
 
   console.log("weeks");
@@ -165,6 +165,16 @@ async function main() {
   check("empty player name rejected", (await call("POST", "players", { token, body: { name: " " } })).status === 422);
   const np = await call("POST", "players", { token, body: { name: "Cousin" } });
   check("player created", np.status === 201 && np.body.player.name === "Cousin", np.body);
+
+  console.log("devices (push registration)");
+  const apns = "ab".repeat(32);
+  check("bad token format → 422", (await call("POST", "devices", { token, body: { apnsToken: "xyz", environment: "sandbox" } })).status === 422);
+  check("bad environment → 422", (await call("POST", "devices", { token, body: { apnsToken: apns, environment: "staging" } })).status === 422);
+  check("register → 204", (await call("POST", "devices", { token, body: { apnsToken: apns, environment: "sandbox" } })).status === 204);
+  check("re-register same token is idempotent", (await call("POST", "devices", { token, body: { apnsToken: apns.toUpperCase(), environment: "production" } })).status === 204);
+  check("devices requires auth", (await call("POST", "devices", { body: { apnsToken: apns, environment: "sandbox" } })).status === 401);
+  check("unregister → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
+  check("unregister unknown token → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
 
   console.log("logout / delete account");
   const lo = await signIn(EMAIL);

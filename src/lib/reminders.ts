@@ -44,13 +44,13 @@ export async function sendRemindersForWeek(weekId: string, opts: { dryRun?: bool
     return targetGameIds.some((id) => !picked?.has(id));
   });
 
-  const namesByUser = new Map<string, { email: string; names: string[] }>();
+  const namesByUser = new Map<string, { userId: string; email: string; names: string[] }>();
   for (const p of notDonePlayers) {
     const existing = namesByUser.get(p.ownerUserId);
     if (existing) {
       existing.names.push(p.name);
     } else {
-      namesByUser.set(p.ownerUserId, { email: p.owner.email, names: [p.name] });
+      namesByUser.set(p.ownerUserId, { userId: p.ownerUserId, email: p.owner.email, names: [p.name] });
     }
   }
 
@@ -72,6 +72,20 @@ export async function sendRemindersForWeek(weekId: string, opts: { dryRun?: bool
     }),
   );
   await sendEmails(messages);
+
+  // Same recipients, same moment, as a push notification to their phones.
+  const { sendPushToUsers } = await import("@/lib/push");
+  for (const { userId, names } of namesByUser.values()) {
+    const who =
+      names.length === 1
+        ? `${names[0]} hasn't`
+        : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} haven't`;
+    await sendPushToUsers([userId], {
+      title: `⏰ Week ${week.weekNumber} picks are due`,
+      body: `${who} picked yet${deadlineText ? `. Picks lock ${deadlineText}.` : "."}`,
+      data: { tab: "picks", week: String(week.weekNumber) },
+    });
+  }
 
   return { sent: messages.length, recipients };
 }
