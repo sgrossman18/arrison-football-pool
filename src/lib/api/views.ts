@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { getOrCreateCurrentSeason, getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
+import type { Season } from "@prisma/client";
+import { getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
 import {
   effectiveLockTime,
   gameLockTime,
@@ -18,10 +19,17 @@ import {
 import { formatEastern, formatEasternWeekday } from "@/lib/timezone";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
 import { notFound } from "@/lib/api/errors";
+import { DEMO_SEASON_YEAR } from "@/lib/demo";
 import { serverTime } from "@/lib/api/http";
 
 // Response builders for the mobile API. They mirror what the web pages compute
 // (same libs, same copy) so the app only renders — it never re-derives a rule.
+
+// The App Review fixture season is stored under a reserved internal year; show
+// the current calendar year instead.
+function displayYear(season: Season): number {
+  return season.year === DEMO_SEASON_YEAR ? new Date().getFullYear() : season.year;
+}
 
 export async function listPlayers(userId: string) {
   const players = await prisma.player.findMany({
@@ -32,13 +40,12 @@ export async function listPlayers(userId: string) {
   return players;
 }
 
-export async function buildWeeksList() {
-  const season = await getOrCreateCurrentSeason();
-  const allWeeks = await getSeasonWeeks();
+export async function buildWeeksList(season: Season) {
+  const allWeeks = await getSeasonWeeks(season);
   const current = pickCurrentWeek(allWeeks);
   return {
     serverTime: serverTime(),
-    seasonYear: season.year,
+    seasonYear: displayYear(season),
     currentWeekNumber: current && current.games.length > 0 ? current.weekNumber : null,
     weeks: allWeeks
       .filter((w) => w.games.length > 0)
@@ -52,11 +59,13 @@ export async function buildWeeksList() {
 
 export async function buildPicksState({
   userId,
+  season,
   weekNumber,
   playerId,
   now = new Date(),
 }: {
   userId: string;
+  season: Season;
   weekNumber: number;
   playerId?: string | null;
   now?: Date;
@@ -66,7 +75,7 @@ export async function buildPicksState({
   const player = playerId ? players.find((p) => p.id === playerId) : players[0];
   if (!player) throw notFound("That picker profile isn't yours.");
 
-  const weeks = await getSeasonWeeks();
+  const weeks = await getSeasonWeeks(season);
   const week = weeks.find((w) => w.weekNumber === weekNumber && w.games.length > 0);
   if (!week) throw notFound("That week isn't set up yet.");
 
@@ -159,8 +168,8 @@ export async function buildPicksState({
   };
 }
 
-export async function findWeekId(weekNumber: number): Promise<string> {
-  const weeks = await getSeasonWeeks();
+export async function findWeekId(season: Season, weekNumber: number): Promise<string> {
+  const weeks = await getSeasonWeeks(season);
   const week = weeks.find((w) => w.weekNumber === weekNumber && w.games.length > 0);
   if (!week) throw notFound("That week isn't set up yet.");
   return week.id;
@@ -168,16 +177,17 @@ export async function findWeekId(weekNumber: number): Promise<string> {
 
 export async function buildResults({
   userId,
+  season,
   weekNumber,
   now = new Date(),
 }: {
   userId: string;
+  season: Season;
   weekNumber: number;
   now?: Date;
 }) {
   await maybeSyncActiveWeeks();
 
-  const season = await getOrCreateCurrentSeason();
   const weekNumbers = (
     await prisma.week.findMany({
       where: { seasonId: season.id, games: { some: {} } },
@@ -282,10 +292,9 @@ export async function buildResults({
   };
 }
 
-export async function buildStandings(userId: string) {
+export async function buildStandings(userId: string, season: Season) {
   await maybeSyncActiveWeeks();
 
-  const season = await getOrCreateCurrentSeason();
   const weeks = await prisma.week.findMany({
     where: { seasonId: season.id, games: { some: {} } },
     orderBy: { weekNumber: "asc" },
@@ -319,7 +328,7 @@ export async function buildStandings(userId: string) {
 
   return {
     serverTime: serverTime(),
-    seasonYear: season.year,
+    seasonYear: displayYear(season),
     dropCount: Math.max(0, ...standings.map((s) => s.droppedWeeks.length)),
     weeks: weeks.map((w) => ({
       weekNumber: w.weekNumber,

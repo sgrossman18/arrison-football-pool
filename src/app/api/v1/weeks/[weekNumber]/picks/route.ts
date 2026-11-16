@@ -1,3 +1,4 @@
+import { resolveSeason } from "@/lib/api/season-scope";
 import { authedRoute, json, readJson } from "@/lib/api/http";
 import { invalid, notFound } from "@/lib/api/errors";
 import { buildPicksState, findWeekId } from "@/lib/api/views";
@@ -12,7 +13,8 @@ function parseWeekNumber(raw: string): number {
 export const GET = authedRoute<{ weekNumber: string }>(async (req, { params, user }) => {
   const weekNumber = parseWeekNumber(params.weekNumber);
   const playerId = req.nextUrl.searchParams.get("playerId");
-  return json(await buildPicksState({ userId: user.id, weekNumber, playerId }));
+  const season = await resolveSeason(user);
+  return json(await buildPicksState({ userId: user.id, season, weekNumber, playerId }));
 });
 
 export const PUT = authedRoute<{ weekNumber: string }>(async (req, { params, user }) => {
@@ -34,8 +36,9 @@ export const PUT = authedRoute<{ weekNumber: string }>(async (req, { params, use
     picks.push({ gameId: p.gameId, pickedTeam: p.pickedTeam, confidence: p.confidence });
   }
 
-  const weekId = await findWeekId(weekNumber);
+  const season = await resolveSeason(user);
+  const weekId = await findWeekId(season, weekNumber);
   const result = await savePicks({ userId: user.id, weekId, playerId: body.playerId, picks });
   if (!result.ok) throw invalid(result.error);
-  return json(await buildPicksState({ userId: user.id, weekNumber, playerId: body.playerId }));
+  return json(await buildPicksState({ userId: user.id, season, weekNumber, playerId: body.playerId }));
 });

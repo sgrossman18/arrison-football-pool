@@ -84,9 +84,11 @@ async function main() {
   const reuse = await call("POST", "auth/verify-code", { body: { email: EMAIL, code: latestCodeFor(EMAIL) } });
   check("code can't be reused", reuse.status === 401);
 
+  let demoToken = null;
   if (DEMO_EMAIL && DEMO_CODE) {
     const d = await call("POST", "auth/verify-code", { body: { email: DEMO_EMAIL, code: DEMO_CODE } });
     check("demo account signs in with fixed code", d.status === 200 && d.body.user.email === DEMO_EMAIL, d.body);
+    demoToken = d.body?.token ?? null;
   }
 
   console.log("me / players");
@@ -175,6 +177,49 @@ async function main() {
   check("devices requires auth", (await call("POST", "devices", { body: { apnsToken: apns, environment: "sandbox" } })).status === 401);
   check("unregister → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
   check("unregister unknown token → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
+
+  if (demoToken) {
+    console.log("demo fixture (App Review account)");
+    const dt = demoToken;
+    const dme = await call("GET", "me", { token: dt });
+    let demoPlayer = dme.body.players[0];
+    if (!demoPlayer) demoPlayer = (await call("POST", "players", { token: dt, body: { name: "Reviewer" } })).body.player;
+    const dw = await call("GET", "weeks", { token: dt });
+    check("demo sees 5 weeks, current = 5", dw.body.weeks.length === 5 && dw.body.currentWeekNumber === 5, dw.body);
+    check("week 3 is an undroppable (6-game) week", dw.body.weeks.find((w) => w.weekNumber === 3)?.droppable === false);
+    const dp = await call("GET", `weeks/5/picks?playerId=${demoPlayer.id}`, { token: dt });
+    check("demo week: game 1 locked, rest open", dp.body.games[0].locked && dp.body.games.slice(1).every((g) => !g.locked), dp.body.games?.map((g) => g.locked));
+    check("demo week: skipped locked game burns 5", JSON.stringify(dp.body.spent.burned) === "[5]" && dp.body.canSubmit === true, dp.body.spent);
+    check("demo week: staged lock labels", dp.body.staged && /^Locks /.test(dp.body.games[1].lockLabel ?? ""), dp.body.games?.[1]?.lockLabel);
+    const dopen = dp.body.games.filter((g) => !g.locked);
+    const dput = await call("PUT", "weeks/5/picks", {
+      token: dt,
+      body: { playerId: demoPlayer.id, picks: dopen.map((g, i) => ({ gameId: g.id, pickedTeam: g.homeTeam, confidence: i + 1 })) },
+    });
+    check("demo can save picks", dput.status === 200 && dput.body.games[1].myPick?.confidence === 1, dput.body);
+    const dr = await call("GET", "weeks/5/results", { token: dt });
+    const dad = dr.body.rows.find((r) => r.name === "Dad");
+    check("demo results: fake players present, open picks hidden", !!dad && dad.picks[2].state === "hidden" && dad.picks[0].state !== "hidden", dad?.picks);
+    const dst = await call("GET", "standings", { token: dt });
+    check("demo standings: 1 dropped week, 3 fake players + reviewer", dst.body.dropCount === 1 && dst.body.rows.length >= 3, [dst.body.dropCount, dst.body.rows.length]);
+    check("demo standings: a ★ week", dst.body.weeks.some((w) => !w.droppable));
+    check("demo standings show the real calendar year, not the internal one", dst.body.seasonYear === new Date().getFullYear(), dst.body.seasonYear);
+    const de = await call("POST", "egg", { token: dt, body: { response: "demo egg" } });
+    check("demo egg works", de.status === 201 && (await call("GET", "egg", { token: dt })).body.weekNumber === 5, de.body);
+
+    // The real user must never see any of it.
+    const rw = await call("GET", "weeks", { token });
+    check("real user's weeks unaffected by demo season", rw.body.weeks.every((w) => w.weekNumber >= 10) && rw.body.currentWeekNumber === 11, rw.body);
+    const rst = await call("GET", "standings", { token });
+    check("real standings contain no demo players", !rst.body.rows.some((r) => ["Dad", "Mom", "Casey", "Reviewer"].includes(r.name)), rst.body.rows.map((r) => r.name));
+    const rres = await call("GET", "weeks/11/results", { token });
+    check("real results contain no demo players", !rres.body.rows.some((r) => ["Dad", "Mom", "Casey", "Reviewer"].includes(r.name)));
+
+    if (process.env.CRON_SECRET) {
+      const cron = await fetch(`${BASE}/api/cron/send-reminders?dryRun=1`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }).then((r) => r.json());
+      check("reminder recipients exclude demo accounts", Array.isArray(cron.recipients) && !cron.recipients.some((e) => e === DEMO_EMAIL || e.endsWith("@demo.invalid")), cron);
+    }
+  }
 
   console.log("logout / delete account");
   const lo = await signIn(EMAIL);

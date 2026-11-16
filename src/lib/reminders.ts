@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { effectiveLockTime, gameLockTime, nextUpcomingLock } from "@/lib/locking";
 import { formatEastern } from "@/lib/timezone";
+import { isDemoAccountEmail } from "@/lib/demo";
 
 // Emails everyone who hasn't picked the games that lock next — one email per
 // login, even if it owns several not-done players (e.g. a parent picking for
@@ -18,7 +19,9 @@ export async function sendRemindersForWeek(weekId: string, opts: { dryRun?: bool
     return { sent: 0, recipients: [] as string[], error: "No games set up yet." };
   }
 
-  const allPlayers = await prisma.player.findMany({ include: { owner: true } });
+  const allPlayers = (await prisma.player.findMany({ include: { owner: true } })).filter(
+    (p) => !isDemoAccountEmail(p.owner.email),
+  );
   const picks = await prisma.pick.findMany({
     where: { gameId: { in: week.games.map((g) => g.id) } },
     select: { playerId: true, gameId: true },

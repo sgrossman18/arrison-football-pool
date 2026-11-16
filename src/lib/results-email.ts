@@ -7,6 +7,7 @@ import {
   rankStandings,
 } from "@/lib/scoring";
 import { escapeHtml, sendEmails, type OutgoingEmail } from "@/lib/email";
+import { isDemoAccountEmail } from "@/lib/demo";
 
 const GREEN = "#1a5d3a";
 
@@ -139,11 +140,13 @@ export async function sendResultsEmailForWeek(weekId: string, opts: { dryRun?: b
   const built = await buildResultsEmail(weekId);
   if (!built) return { sent: 0, recipients: [] as string[], error: "Week not found." };
 
-  const users = await prisma.user.findMany({
-    where: { players: { some: {} } },
-    select: { id: true, email: true },
-    orderBy: { email: "asc" },
-  });
+  const users = (
+    await prisma.user.findMany({
+      where: { players: { some: {} } },
+      select: { id: true, email: true },
+      orderBy: { email: "asc" },
+    })
+  ).filter((u) => !isDemoAccountEmail(u.email));
   const recipients = users.map((u) => u.email);
   if (opts.dryRun) return { sent: 0, recipients, html: built.html, subject: built.subject };
 

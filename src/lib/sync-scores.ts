@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { DEMO_SEASON_YEAR } from "@/lib/demo";
 import { fetchWeekScoreboard } from "@/lib/espn";
 import { firstLockTime } from "@/lib/locking";
 
@@ -26,7 +27,10 @@ export async function maybeSyncActiveWeeks() {
 // it's a no-op once every game in a week is FINAL.
 export async function syncAllActiveWeeks() {
   const weeks = await prisma.week.findMany({
-    where: { games: { some: { status: { not: "FINAL" } } } },
+    where: {
+      games: { some: { status: { not: "FINAL" } } },
+      season: { year: { not: DEMO_SEASON_YEAR } }, // the App Review fixture isn't real
+    },
     include: { games: true, season: true },
   });
 
