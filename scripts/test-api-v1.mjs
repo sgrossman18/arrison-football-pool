@@ -175,8 +175,13 @@ async function main() {
   check("register → 204", (await call("POST", "devices", { token, body: { apnsToken: apns, environment: "sandbox" } })).status === 204);
   check("re-register same token is idempotent", (await call("POST", "devices", { token, body: { apnsToken: apns.toUpperCase(), environment: "production" } })).status === 204);
   check("devices requires auth", (await call("POST", "devices", { body: { apnsToken: apns, environment: "sandbox" } })).status === 401);
+  check("test push requires auth", (await call("POST", "devices/test", {})).status === 401);
+  const tp = await call("POST", "devices/test", { token });
+  check("test push → 200 (not_configured locally, or sent/failed with APNs)", tp.status === 200 && ["not_configured", "sent", "failed"].includes(tp.body.result) && tp.body.devices === 1, tp.body);
+  check("test push cooldown → 429", (await call("POST", "devices/test", { token })).status === 429);
   check("unregister → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
   check("unregister unknown token → 204", (await call("DELETE", `devices/${apns}`, { token })).status === 204);
+  check("test push with no devices → no_devices", (await call("POST", "devices/test", { token })).body?.result === "no_devices");
 
   if (demoToken) {
     console.log("demo fixture (App Review account)");

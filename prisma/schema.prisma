@@ -241,6 +241,8 @@ model DeviceToken {
   environment String // sandbox | production
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime @default(now())
+  // Cooldown for the "send me a test notification" button.
+  lastTestPushAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
