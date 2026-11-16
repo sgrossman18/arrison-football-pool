@@ -23,6 +23,8 @@ model User {
   players       Player[]
   cheatClicks   CheatClick[]
   eggSubmissions EggSubmission[]
+  apiTokens     ApiToken[]
+  deviceTokens  DeviceToken[]
 }
 
 // The actual pool participant/picker. Usually one Player per User, but a
@@ -196,4 +198,51 @@ model EggSubmission {
 
   week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Bearer tokens for the mobile app (/api/v1). Only the SHA-256 hash of the
+// token is stored. Minted by POST /api/v1/auth/verify-code.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  deviceName String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// One-time sign-in codes emailed to the mobile app (replaces the magic link).
+// Only an HMAC of the code is stored.
+model LoginCode {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
+// An iPhone registered for push notifications (pick reminders, "results are
+// in"). `environment` is which APNs host the token belongs to: Xcode/dev builds
+// get sandbox tokens, TestFlight/App Store builds get production ones.
+model DeviceToken {
+  id          String   @id @default(cuid())
+  userId      String
+  apnsToken   String   @unique
+  environment String // sandbox | production
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

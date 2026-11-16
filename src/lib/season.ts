@@ -13,8 +13,8 @@ export async function getOrCreateCurrentSeason() {
   return season;
 }
 
-export async function getSeasonWeeks() {
-  const season = await getOrCreateCurrentSeason();
+export async function getSeasonWeeks(forSeason?: { id: string }) {
+  const season = forSeason ?? (await getOrCreateCurrentSeason());
   return prisma.week.findMany({
     where: { seasonId: season.id },
     orderBy: { weekNumber: "asc" },
@@ -44,6 +44,6 @@ export function pickCurrentWeek<
   return active ?? withGames[withGames.length - 1] ?? weeks[weeks.length - 1] ?? null;
 }
 
-export async function getCurrentWeek() {
-  return pickCurrentWeek(await getSeasonWeeks());
+export async function getCurrentWeek(forSeason?: { id: string }) {
+  return pickCurrentWeek(await getSeasonWeeks(forSeason));
 }

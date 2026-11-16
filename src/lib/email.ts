@@ -62,6 +62,22 @@ export async function sendMagicLinkEmail({
   });
 }
 
+// Sign-in code for the mobile app (replaces the magic link there).
+export async function sendLoginCodeEmail({ to, code }: { to: string; code: string }) {
+  await sendEmail({
+    to,
+    subject: `${code} is your Arrison Football Pool sign-in code`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2>🏈 Arrison Football Pool</h2>
+        <p>Enter this code in the app to sign in:</p>
+        <p style="font-size:32px;font-weight:bold;letter-spacing:6px;margin:16px 0;">${code}</p>
+        <p style="color:#666;font-size:13px;">This code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+      </div>
+    `,
+  });
+}
+
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
