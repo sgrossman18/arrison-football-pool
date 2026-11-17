@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getBonusWinners } from "@/lib/bonus";
 import type { Season } from "@prisma/client";
 import { getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
 import {
@@ -217,6 +218,7 @@ export async function buildResults({
   const allLocked = lockedGameIds.size === week.games.length;
 
   const players = new Map(picks.map((p) => [p.playerId, p.player]));
+  const bonusWinners = (await getBonusWinners([week.id])).get(week.id) ?? [];
   const scores = computeWeekScores(
     week.games,
     picks.map((p) => ({
@@ -225,6 +227,7 @@ export async function buildResults({
       pickedTeam: p.pickedTeam,
       confidence: p.confidence,
     })),
+    bonusWinners,
   );
 
   const rows = [...players.values()]
@@ -308,11 +311,14 @@ export async function buildStandings(userId: string, season: Season) {
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
   const playerById = new Map(players.map((p) => [p.id, p]));
 
+  const bonusWinners = await getBonusWinners(weeks.map((w) => w.id));
+
   const standings = rankStandings(
     computeSeasonStandings(
       weeks.map((w) => ({
         weekNumber: w.weekNumber,
         games: w.games,
+        bonusPlayerIds: bonusWinners.get(w.id),
         picks: picks
           .filter((p) => w.games.some((g) => g.id === p.gameId))
           .map((p) => ({

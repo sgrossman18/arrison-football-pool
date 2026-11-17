@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getOrCreateCurrentSeason } from "@/lib/season";
 import { isGameLocked } from "@/lib/locking";
+import { getBonusWinners } from "@/lib/bonus";
 import { gameOutcome, pickPoints, computeWeekScores } from "@/lib/scoring";
 import { NFL_TEAMS, teamName } from "@/lib/teams";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
@@ -62,6 +63,7 @@ export default async function ResultsPage({
 
   const playerIds = [...new Set(picks.map((p) => p.playerId))];
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
+  const bonusWinners = (await getBonusWinners([week.id])).get(week.id) ?? [];
   const scores = computeWeekScores(
     week.games,
     picks.map((p) => ({
@@ -70,6 +72,7 @@ export default async function ResultsPage({
       pickedTeam: p.pickedTeam,
       confidence: p.confidence,
     })),
+    bonusWinners,
   );
 
   const rows = players
@@ -175,6 +178,12 @@ export default async function ResultsPage({
                     <td className="py-2.5 pl-4 pr-3 font-medium whitespace-nowrap">
                       {player.name}
                       {isMe && <span className="text-accent"> · you</span>}
+                      {scores.get(player.id)?.bonus ? (
+                        <span className="text-muted" title="Bonus point: guessed the boy/girl question right">
+                          {" "}
+                          · 🍼 +1
+                        </span>
+                      ) : null}
                     </td>
                     {week.games.map((g) => {
                       const pick = picks.find(

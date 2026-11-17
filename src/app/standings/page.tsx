@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getOrCreateCurrentSeason } from "@/lib/season";
+import { getBonusWinners } from "@/lib/bonus";
 import { computeSeasonStandings, isDroppableWeek, rankStandings } from "@/lib/scoring";
 import { maybeSyncActiveWeeks } from "@/lib/sync-scores";
 
@@ -31,11 +32,14 @@ export default async function StandingsPage() {
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } } });
   const playerById = new Map(players.map((p) => [p.id, p]));
 
+  const bonusWinners = await getBonusWinners(weeks.map((w) => w.id));
+
   const standings = rankStandings(
     computeSeasonStandings(
       weeks.map((w) => ({
         weekNumber: w.weekNumber,
         games: w.games,
+        bonusPlayerIds: bonusWinners.get(w.id),
         picks: picks
           .filter((p) => w.games.some((g) => g.id === p.gameId))
           .map((p) => ({

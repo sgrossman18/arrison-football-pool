@@ -41,6 +41,10 @@ export default function PrivacyPage() {
           administrators can read these.
         </li>
         <li>
+          <strong>Bonus point guesses</strong> — your guess on the occasional bonus-point question.
+          Guesses stay hidden from other players until the answer is revealed.
+        </li>
+        <li>
           <strong>Push notification token</strong> — if you turn on notifications in the app, Apple
           gives us an anonymous device token so we can send you pick reminders and &ldquo;results are
           in&rdquo; alerts. You can turn this off at any time in the app or in iOS Settings.
