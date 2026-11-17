@@ -15,6 +15,7 @@ import {
 } from "@/lib/timezone";
 import { effectiveLockTime } from "@/lib/locking";
 import { computeGameLocks } from "@/lib/lock-schedule";
+import { isBonusChoice } from "@/lib/bonus";
 
 export async function createNextWeek() {
   await requireAdmin();
@@ -219,10 +220,14 @@ export async function mergePlayers(sourcePlayerId: string, targetPlayerId: strin
   ]);
   if (!source || !target) return { ok: false, error: "Player not found." };
 
-  const [targetPicks, targetOverrides] = await Promise.all([
+  const [targetPicks, targetOverrides, targetGuesses, sourceGuesses] = await Promise.all([
     prisma.pick.findMany({ where: { playerId: targetPlayerId }, select: { gameId: true } }),
     prisma.lockOverride.findMany({ where: { playerId: targetPlayerId }, select: { weekId: true } }),
+    prisma.bonusGuess.findMany({ where: { playerId: targetPlayerId }, select: { weekId: true } }),
+    prisma.bonusGuess.findMany({ where: { playerId: sourcePlayerId } }),
   ]);
+  const targetGuessWeekIds = new Set(targetGuesses.map((g) => g.weekId));
+  const guessesToMove = sourceGuesses.filter((g) => !targetGuessWeekIds.has(g.weekId));
   const targetGameIds = new Set(targetPicks.map((p) => p.gameId));
   const targetWeekIds = new Set(targetOverrides.map((o) => o.weekId));
 
@@ -236,6 +241,9 @@ export async function mergePlayers(sourcePlayerId: string, targetPlayerId: strin
     ),
     ...overridesToMove.map((o) =>
       prisma.lockOverride.update({ where: { id: o.id }, data: { playerId: targetPlayerId } }),
+    ),
+    ...guessesToMove.map((g) =>
+      prisma.bonusGuess.update({ where: { id: g.id }, data: { playerId: targetPlayerId } }),
     ),
     // Cascades away anything left on source (the conflicting duplicates we
     // deliberately didn't move).
@@ -440,4 +448,55 @@ export async function setLocksFromSchedule(weekId: string) {
   revalidatePath("/picks");
   revalidatePath("/results");
   return { ok: true as const, matched: startById.size, total: week.games.length, early };
+}
+
+// ---- Bonus point (weekly one-off question; see lib/bonus.ts) ----
+
+// answer: "BOY" | "GIRL" | "" (unset)
+export async function setBonusConfig(
+  weekId: string,
+  data: { enabled: boolean; answer: string; heading: string; blurb: string; imageUrl: string },
+) {
+  await requireAdmin();
+  const answer = isBonusChoice(data.answer) ? data.answer : null;
+  const imageUrl = data.imageUrl.trim();
+  if (imageUrl && !/^https:\/\//i.test(imageUrl)) {
+    return { ok: false, error: "The picture link must start with https://" };
+  }
+  const week = await prisma.week.findUnique({ where: { id: weekId } });
+  if (!week) return { ok: false, error: "Week not found." };
+
+  await prisma.week.update({
+    where: { id: weekId },
+    data: {
+      bonusEnabled: data.enabled,
+      bonusAnswer: answer,
+      bonusHeading: data.heading.trim() || null,
+      bonusBlurb: data.blurb.trim() || null,
+      bonusImageUrl: imageUrl || null,
+      // Changing or clearing the answer always re-hides the reveal, so nobody
+      // earns points off a half-edited answer.
+      bonusRevealed: answer && week.bonusAnswer === answer ? week.bonusRevealed : false,
+    },
+  });
+  revalidatePath(`/admin/weeks/${weekId}`);
+  revalidatePath("/bonus");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  return { ok: true };
+}
+
+export async function setBonusRevealed(weekId: string, revealed: boolean) {
+  await requireAdmin();
+  const week = await prisma.week.findUnique({ where: { id: weekId } });
+  if (!week) return { ok: false, error: "Week not found." };
+  if (revealed && !week.bonusAnswer) return { ok: false, error: "Set the answer first." };
+  if (revealed && !week.bonusEnabled) return { ok: false, error: "Turn the bonus point on first." };
+
+  await prisma.week.update({ where: { id: weekId }, data: { bonusRevealed: revealed } });
+  revalidatePath(`/admin/weeks/${weekId}`);
+  revalidatePath("/bonus");
+  revalidatePath("/results");
+  revalidatePath("/standings");
+  return { ok: true };
 }

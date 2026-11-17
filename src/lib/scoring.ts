@@ -54,13 +54,18 @@ export type PlayerWeekResult = {
   gradedGames: number;
   totalGames: number;
   complete: boolean; // every game in the week is FINAL
+  bonus: number; // 1 if they earned the week's bonus point (already in `points`)
 };
 
-// One week's per-player point totals.
+// One week's per-player point totals. `bonusPlayerIds` are the players who
+// earned the week's bonus point (see lib/bonus.ts); each gets +1 on top of
+// their picks, even if they didn't submit any.
 export function computeWeekScores(
   games: GameLite[],
   picks: PickLite[],
+  bonusPlayerIds: Iterable<string> = [],
 ): Map<string, PlayerWeekResult> {
+  const bonusSet = new Set(bonusPlayerIds);
   const results = new Map<string, PlayerWeekResult>();
   const byPlayer = new Map<string, PickLite[]>();
   for (const pick of picks) {
@@ -70,8 +75,13 @@ export function computeWeekScores(
 
   const allGraded = games.every((g) => g.status === "FINAL");
 
+  for (const playerId of bonusSet) {
+    if (!byPlayer.has(playerId)) byPlayer.set(playerId, []);
+  }
+
   for (const [playerId, playerPicks] of byPlayer) {
-    let points = 0;
+    const bonus = bonusSet.has(playerId) ? 1 : 0;
+    let points = bonus;
     let gradedGames = 0;
     for (const pick of playerPicks) {
       const game = games.find((g) => g.id === pick.gameId);
@@ -87,6 +97,7 @@ export function computeWeekScores(
       gradedGames,
       totalGames: games.length,
       complete: allGraded,
+      bonus,
     });
   }
   return results;
@@ -96,6 +107,7 @@ export type WeekForStandings = {
   weekNumber: number;
   games: GameLite[];
   picks: PickLite[];
+  bonusPlayerIds?: string[]; // players who earned the week's bonus point
 };
 
 export type SeasonStanding = {
@@ -129,7 +141,7 @@ export function computeSeasonStandings(
 ): SeasonStanding[] {
   const perWeek = weeks.map((w) => ({
     weekNumber: w.weekNumber,
-    scores: computeWeekScores(w.games, w.picks),
+    scores: computeWeekScores(w.games, w.picks, w.bonusPlayerIds),
     // Completeness is a property of the week, not the player: someone who
     // didn't submit that week still has a graded 0, which they can drop.
     complete: w.games.length > 0 && w.games.every((g) => g.status === "FINAL"),

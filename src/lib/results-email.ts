@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getBonusWinners } from "@/lib/bonus";
 import {
   assignRanks,
   computeSeasonStandings,
@@ -67,7 +68,12 @@ export async function buildResultsEmail(weekId: string) {
 
   // This week's results.
   const gameIds = new Set(thisWeek.games.map((g) => g.id));
-  const weekScores = computeWeekScores(thisWeek.games, toLite(picks.filter((p) => gameIds.has(p.gameId))));
+  const bonusWinners = await getBonusWinners(weeks.map((w) => w.id));
+  const weekScores = computeWeekScores(
+    thisWeek.games,
+    toLite(picks.filter((p) => gameIds.has(p.gameId))),
+    bonusWinners.get(thisWeek.id),
+  );
   const weekRows = assignRanks(
     [...weekScores.entries()]
       .map(([playerId, r]) => ({ playerId, points: r.points }))
@@ -80,7 +86,12 @@ export async function buildResultsEmail(weekId: string) {
     computeSeasonStandings(
       weeks.map((w) => {
         const ids = new Set(w.games.map((g) => g.id));
-        return { weekNumber: w.weekNumber, games: w.games, picks: toLite(picks.filter((p) => ids.has(p.gameId))) };
+        return {
+          weekNumber: w.weekNumber,
+          games: w.games,
+          picks: toLite(picks.filter((p) => ids.has(p.gameId))),
+          bonusPlayerIds: bonusWinners.get(w.id),
+        };
       }),
       playerIds,
     ),

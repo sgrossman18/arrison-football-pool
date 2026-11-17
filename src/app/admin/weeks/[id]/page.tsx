@@ -14,6 +14,7 @@ import DeleteWeekButton from "@/components/DeleteWeekButton";
 import SendResultsButton from "@/components/SendResultsButton";
 import SortGamesButton from "@/components/SortGamesButton";
 import SetLocksButton from "@/components/SetLocksButton";
+import BonusImageField from "@/components/BonusImageField";
 import {
   addGame,
   updateGame,
@@ -22,6 +23,8 @@ import {
   setWeekDeadline,
   grantLockOverride,
   revokeLockOverride,
+  setBonusConfig,
+  setBonusRevealed,
 } from "@/app/admin/actions";
 
 export const maxDuration = 60;
@@ -69,6 +72,16 @@ export default async function WeekEditorPage({
     const status = count === 0 ? "none" : count === totalGames ? "done" : "partial";
     return { player: p, count, status };
   });
+  const bonusGuesses = await prisma.bonusGuess.findMany({
+    where: { weekId: week.id },
+    include: { player: true },
+  });
+  const bonusCount = { BOY: 0, GIRL: 0 };
+  for (const g of bonusGuesses) if (g.guess === "BOY" || g.guess === "GIRL") bonusCount[g.guess]++;
+  const bonusGuessedIds = new Set(bonusGuesses.map((g) => g.playerId));
+  const bonusNotGuessed = allPlayers.filter((p) => !bonusGuessedIds.has(p.id));
+  const bonusWinnerCount = week.bonusAnswer ? bonusCount[week.bonusAnswer as "BOY" | "GIRL"] : 0;
+
   const notDone = submissionStatus.filter((s) => s.status !== "done");
   const done = submissionStatus.filter((s) => s.status === "done");
 
@@ -80,6 +93,90 @@ export default async function WeekEditorPage({
           Pick the ~5 closest matchups (by Vegas spread), ignoring Thursday night.
         </p>
       </div>
+
+      {/* Bonus point */}
+      <section>
+        <h2 className="text-lg font-bold mb-3">Bonus point</h2>
+        <p className="text-sm text-muted mb-3">
+          A one-off boy-or-girl question. While it&apos;s off, players don&apos;t see it (the nav
+          still says Egg); you can always{" "}
+          <a href="/bonus" className="text-accent-strong font-medium hover:underline">
+            preview the page
+          </a>
+          . Everyone who guesses the answer gets +1 on this week&apos;s score once you reveal it.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            await setBonusConfig(week.id, {
+              enabled: formData.get("enabled") === "on",
+              answer: String(formData.get("answer") ?? ""),
+              heading: String(formData.get("heading") ?? ""),
+              blurb: String(formData.get("blurb") ?? ""),
+              imageUrl: String(formData.get("imageUrl") ?? ""),
+            });
+          }}
+          className="flex items-center gap-3 flex-wrap"
+        >
+          <input
+            type="text"
+            name="heading"
+            defaultValue={week.bonusHeading ?? ""}
+            placeholder="Headline, e.g. Congratulations to …!"
+            className={`${INPUT} w-full`}
+          />
+          <input
+            type="text"
+            name="blurb"
+            defaultValue={week.bonusBlurb ?? ""}
+            placeholder="One line under the headline (optional)"
+            className={`${INPUT} w-full`}
+          />
+          <BonusImageField defaultValue={week.bonusImageUrl ?? ""} />
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="enabled" defaultChecked={week.bonusEnabled} />
+            Show to players
+          </label>
+          <select name="answer" defaultValue={week.bonusAnswer ?? ""} className={INPUT}>
+            <option value="">Answer: not set</option>
+            <option value="BOY">Answer: Boy</option>
+            <option value="GIRL">Answer: Girl</option>
+          </select>
+          <button type="submit" className={BTN_PRIMARY}>
+            Save
+          </button>
+        </form>
+
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
+          <form
+            action={async () => {
+              "use server";
+              await setBonusRevealed(week.id, !week.bonusRevealed);
+            }}
+          >
+            <button
+              type="submit"
+              disabled={!week.bonusEnabled || !week.bonusAnswer}
+              className={`${week.bonusRevealed ? BTN_OUTLINE_ACCENT : BTN_PRIMARY} disabled:opacity-50`}
+            >
+              {week.bonusRevealed ? "Hide the answer again" : "Reveal answer & award points"}
+            </button>
+          </form>
+          <span className="text-sm text-muted">
+            {week.bonusRevealed
+              ? `Revealed — ${bonusWinnerCount} ${bonusWinnerCount === 1 ? "player earned" : "players earned"} +1.`
+              : "Not revealed yet — nobody has earned a point."}
+          </span>
+        </div>
+
+        <p className="text-sm mt-4">
+          <span className="font-semibold">{bonusGuesses.length} guesses:</span>{" "}
+          {bonusCount.BOY} boy, {bonusCount.GIRL} girl
+          {bonusNotGuessed.length > 0 && bonusGuesses.length > 0 && (
+            <span className="text-muted"> · haven&apos;t guessed: {bonusNotGuessed.map((p) => p.name).join(", ")}</span>
+          )}
+        </p>
+      </section>
 
       {/* Deadline */}
       <section>

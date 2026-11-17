@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
+import { isBonusLive } from "@/lib/bonus";
 
 const NAV_LINK =
   "text-sm text-white/70 hover:text-white transition-colors px-2.5 py-1.5 rounded-md hover:bg-white/10";
 
 export default async function NavBar() {
   const session = await auth();
+  // While a week's bonus-point question is live, the Egg tab becomes Bonus
+  // Point (the egg form stays reachable from that page).
+  const bonusLive = session?.user ? await isBonusLive() : false;
 
   return (
     <header className="sticky top-0 z-10 bg-[#0d1512] border-b border-white/10">
@@ -30,8 +34,8 @@ export default async function NavBar() {
             <Link href="/standings" className={NAV_LINK}>
               Standings
             </Link>
-            <Link href="/egg" className={NAV_LINK}>
-              Egg
+            <Link href={bonusLive ? "/bonus" : "/egg"} className={NAV_LINK}>
+              {bonusLive ? "Bonus Point" : "Egg"}
             </Link>
             {session.user.isAdmin && (
               <Link href="/admin" className={`${NAV_LINK} text-gold hover:text-gold`}>

@@ -40,6 +40,7 @@ model Player {
   owner         User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   picks         Pick[]
   lockOverrides LockOverride[]
+  bonusGuesses  BonusGuess[]
 }
 
 // NextAuth (Auth.js) required models
@@ -106,6 +107,18 @@ model Week {
   lockOverrides LockOverride[]
   cheatClicks   CheatClick[]
   eggSubmissions EggSubmission[]
+  bonusGuesses  BonusGuess[]
+  // One-off "bonus point" question for the week (e.g. boy or girl?). Hidden
+  // from players until bonusEnabled; the answer stays private until an admin
+  // reveals it, at which point every correct guesser earns +1 for the week.
+  bonusEnabled  Boolean  @default(false)
+  bonusAnswer   String? // "BOY" | "GIRL"
+  bonusRevealed Boolean  @default(false)
+  // Display copy and picture for the question, set from the admin week page
+  // (kept out of the code, which is public, until it's announced).
+  bonusHeading  String?
+  bonusBlurb    String?
+  bonusImageUrl String?
 
   @@unique([seasonId, weekNumber])
 }
@@ -247,4 +260,20 @@ model DeviceToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// A player's guess at the week's bonus-point question (see Week.bonusEnabled).
+// One per player per week; can be changed until the answer is revealed.
+model BonusGuess {
+  id        String   @id @default(cuid())
+  weekId    String
+  playerId  String
+  guess     String // "BOY" | "GIRL"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  week   Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([weekId, playerId])
 }
