@@ -76,6 +76,9 @@ export default async function WeekEditorPage({
     where: { weekId: week.id },
     include: { player: true },
   });
+  const bonusNames = bonusGuesses
+    .filter((g) => g.nameGuess)
+    .sort((a, b) => a.player.name.localeCompare(b.player.name));
   const bonusCount = { BOY: 0, GIRL: 0 };
   for (const g of bonusGuesses) if (g.guess === "BOY" || g.guess === "GIRL") bonusCount[g.guess]++;
   const bonusGuessedIds = new Set(bonusGuesses.map((g) => g.playerId));
@@ -114,6 +117,7 @@ export default async function WeekEditorPage({
               heading: String(formData.get("heading") ?? ""),
               blurb: String(formData.get("blurb") ?? ""),
               imageUrl: String(formData.get("imageUrl") ?? ""),
+              hints: String(formData.get("hints") ?? ""),
             });
           }}
           className="flex items-center gap-3 flex-wrap"
@@ -133,6 +137,13 @@ export default async function WeekEditorPage({
             className={`${INPUT} w-full`}
           />
           <BonusImageField defaultValue={week.bonusImageUrl ?? ""} />
+          <textarea
+            name="hints"
+            defaultValue={week.bonusHints ?? ""}
+            rows={4}
+            placeholder="Hints, one per line (optional)"
+            className={`${INPUT} w-full`}
+          />
           <label className="flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" name="enabled" defaultChecked={week.bonusEnabled} />
             Show to players
@@ -176,6 +187,20 @@ export default async function WeekEditorPage({
             <span className="text-muted"> · haven&apos;t guessed: {bonusNotGuessed.map((p) => p.name).join(", ")}</span>
           )}
         </p>
+
+        {bonusNames.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm font-semibold mb-1.5">Baby name guesses (just for fun)</p>
+            <ul className="text-sm rounded-xl bg-surface-2 px-3.5 py-2.5 flex flex-col gap-1">
+              {bonusNames.map((g) => (
+                <li key={g.id}>
+                  <span className="text-muted">{g.player.name}:</span>{" "}
+                  <span className="font-medium">{g.nameGuess}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {/* Deadline */}

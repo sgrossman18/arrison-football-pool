@@ -119,6 +119,8 @@ model Week {
   bonusHeading  String?
   bonusBlurb    String?
   bonusImageUrl String?
+  // One hint per line, shown above the guess buttons.
+  bonusHints    String?
 
   @@unique([seasonId, weekNumber])
 }
@@ -269,6 +271,8 @@ model BonusGuess {
   weekId    String
   playerId  String
   guess     String // "BOY" | "GIRL"
+  // Just-for-fun write-in guess at the baby's name; worth no points.
+  nameGuess String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

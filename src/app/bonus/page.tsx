@@ -25,7 +25,7 @@ export default async function BonusPage() {
       include: { player: true },
     }),
   ]);
-  const guessByPlayer = new Map(guesses.map((g) => [g.playerId, g.guess]));
+  const guessByPlayer = new Map(guesses.map((g) => [g.playerId, g]));
 
   const revealedAnswer =
     week.bonusRevealed && isBonusChoice(week.bonusAnswer) ? week.bonusAnswer : null;
@@ -40,7 +40,12 @@ export default async function BonusPage() {
       weekNumber={week.weekNumber}
       players={myPlayers.map((p) => {
         const g = guessByPlayer.get(p.id);
-        return { id: p.id, name: p.name, guess: isBonusChoice(g) ? g : null };
+        return {
+          id: p.id,
+          name: p.name,
+          guess: isBonusChoice(g?.guess) ? g.guess : null,
+          nameGuess: g?.nameGuess ?? "",
+        };
       })}
       revealedAnswer={revealedAnswer}
       guessCount={guesses.length}
@@ -49,6 +54,10 @@ export default async function BonusPage() {
       heading={week.bonusHeading}
       blurb={week.bonusBlurb}
       hasImage={Boolean(week.bonusImageUrl)}
+      hints={(week.bonusHints ?? "")
+        .split("\n")
+        .map((h) => h.trim())
+        .filter(Boolean)}
     />
   );
 }

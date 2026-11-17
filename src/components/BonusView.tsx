@@ -6,6 +6,7 @@ export type BonusPlayerView = {
   id: string;
   name: string;
   guess: BonusChoice | null;
+  nameGuess: string;
 };
 
 export type BonusViewProps = {
@@ -22,6 +23,7 @@ export type BonusViewProps = {
   heading: string | null;
   blurb: string | null;
   hasImage: boolean;
+  hints: string[];
 };
 
 const label = (c: BonusChoice) => (c === "BOY" ? "boy" : "girl");
@@ -36,6 +38,7 @@ export default function BonusView({
   heading,
   blurb,
   hasImage,
+  hints,
 }: BonusViewProps) {
   return (
     <div className="max-w-xl mx-auto">
@@ -124,6 +127,17 @@ export default function BonusView({
         </div>
       ) : (
         <div className="mt-6">
+          {hints.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface-2 px-5 py-4 mb-6">
+              <h2 className="text-lg font-extrabold tracking-tight mb-2">🔎 Hints</h2>
+              <ol className="list-decimal pl-5 flex flex-col gap-1 text-sm">
+                {hints.map((h, i) => (
+                  <li key={i}>{h}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+
           <h2 className="text-xl font-extrabold tracking-tight">{BONUS_COPY.question}</h2>
           <p className="text-sm text-muted mt-1 mb-4">{BONUS_COPY.prize}</p>
 
@@ -143,6 +157,7 @@ export default function BonusView({
                   playerId={p.id}
                   playerName={p.name}
                   initialGuess={p.guess}
+                  initialName={p.nameGuess}
                   disabled={previewNotLive}
                   showName={players.length > 1}
                 />

@@ -455,7 +455,7 @@ export async function setLocksFromSchedule(weekId: string) {
 // answer: "BOY" | "GIRL" | "" (unset)
 export async function setBonusConfig(
   weekId: string,
-  data: { enabled: boolean; answer: string; heading: string; blurb: string; imageUrl: string },
+  data: { enabled: boolean; answer: string; heading: string; blurb: string; imageUrl: string; hints: string },
 ) {
   await requireAdmin();
   const answer = isBonusChoice(data.answer) ? data.answer : null;
@@ -474,6 +474,7 @@ export async function setBonusConfig(
       bonusHeading: data.heading.trim() || null,
       bonusBlurb: data.blurb.trim() || null,
       bonusImageUrl: imageUrl || null,
+      bonusHints: data.hints.trim() || null,
       // Changing or clearing the answer always re-hides the reveal, so nobody
       // earns points off a half-edited answer.
       bonusRevealed: answer && week.bonusAnswer === answer ? week.bonusRevealed : false,
