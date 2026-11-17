@@ -17,6 +17,8 @@ export type BonusViewProps = {
   guessCount: number;
   // Revealed only: names of everyone who guessed right.
   winnerNames: string[];
+  // Revealed only: everyone's just-for-fun baby-name guesses.
+  nameGuesses: { playerName: string; name: string }[];
   // Admin looking at a page players can't see yet: shows a banner and keeps
   // the buttons from saving real guesses.
   previewNotLive: boolean;
@@ -34,6 +36,7 @@ export default function BonusView({
   revealedAnswer,
   guessCount,
   winnerNames,
+  nameGuesses,
   previewNotLive,
   heading,
   blurb,
@@ -124,6 +127,21 @@ export default function BonusView({
             </Link>{" "}
             pages.
           </p>
+
+          {nameGuesses.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface px-5 py-4 mt-6">
+              <h2 className="text-lg font-extrabold tracking-tight">💬 The baby-name guesses</h2>
+              <p className="text-xs text-muted mb-3">Just for fun — no points, plenty of pressure.</p>
+              <ul className="flex flex-col gap-1.5 text-sm">
+                {nameGuesses.map((g) => (
+                  <li key={g.playerName} className="flex items-baseline justify-between gap-3">
+                    <span className="text-muted">{g.playerName}</span>
+                    <span className="font-semibold text-right break-words">{g.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-6">

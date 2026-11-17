@@ -35,6 +35,15 @@ export default async function BonusPage() {
     .map((g) => g.player.name)
     .sort((a, b) => a.localeCompare(b));
 
+  // Name guesses stay private until the answer is revealed; only then are they
+  // sent to the page at all.
+  const nameGuesses = revealedAnswer
+    ? guesses
+        .filter((g) => g.nameGuess)
+        .map((g) => ({ playerName: g.player.name, name: g.nameGuess as string }))
+        .sort((a, b) => a.playerName.localeCompare(b.playerName))
+    : [];
+
   return (
     <BonusView
       weekNumber={week.weekNumber}
@@ -50,6 +59,7 @@ export default async function BonusPage() {
       revealedAnswer={revealedAnswer}
       guessCount={guesses.length}
       winnerNames={winnerNames}
+      nameGuesses={nameGuesses}
       previewNotLive={!live}
       heading={week.bonusHeading}
       blurb={week.bonusBlurb}
