@@ -7,7 +7,7 @@ const IMAGE_PATH = /\.(?:gif|jpe?g|png|webp|avif)(?=$|[?#/&])/i;
 
 // Hosts that only serve images/GIFs, whatever the path looks like.
 const IMAGE_HOST =
-  /^(?:(?:[\w-]+\.)?giphy\.com|(?:media[\w-]*|c|i)\.tenor\.com|i\.imgur\.com|pbs\.twimg\.com|[\w-]+\.public\.blob\.vercel-storage\.com)$/i;
+  /^(?:(?:[\w-]+\.)?giphy\.com|(?:media[\w-]*|c|i)\.tenor\.com|i\.imgur\.com|pbs\.twimg\.com|encrypted-tbn\d*\.gstatic\.com|[\w-]+\.public\.blob\.vercel-storage\.com)$/i;
 
 // A Giphy *page* link ("Copy link" on giphy.com) isn't an image, but the GIF's
 // id is the last chunk of its path and maps to a direct image URL.
