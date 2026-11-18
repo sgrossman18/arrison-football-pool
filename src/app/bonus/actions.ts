@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getCurrentWeek } from "@/lib/season";
-import { isBonusChoice } from "@/lib/bonus";
+import { getBonusWeek, isBonusChoice } from "@/lib/bonus";
 
 // Save (or change) a player's guess for the current week's bonus point. Any
 // player the signed-in login owns can be guessed for, so a parent can guess
@@ -22,7 +21,7 @@ export async function submitBonusGuess(
     return { ok: false, error: "That isn't one of your players." };
   }
 
-  const week = await getCurrentWeek();
+  const week = await getBonusWeek();
   if (!week?.bonusEnabled) return { ok: false, error: "The bonus point isn't open yet." };
   if (week.bonusRevealed) return { ok: false, error: "The answer has already been revealed." };
 
@@ -58,7 +57,7 @@ export async function submitNameGuess(
     return { ok: false, error: "That isn't one of your players." };
   }
 
-  const week = await getCurrentWeek();
+  const week = await getBonusWeek();
   if (!week?.bonusEnabled) return { ok: false, error: "The bonus point isn't open yet." };
   if (week.bonusRevealed) return { ok: false, error: "The answer has already been revealed." };
 

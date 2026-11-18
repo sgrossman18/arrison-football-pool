@@ -66,7 +66,7 @@ export default function BonusView({
           <div className="px-5 pb-5">
             {/* eslint-disable-next-line @next/next/no-img-element -- auth-gated route, not optimizable */}
             <img
-              src="/bonus/image"
+              src={`/bonus/image?week=${weekNumber}`}
               alt="Bonus point picture"
               className="w-full rounded-2xl border border-border bg-black"
             />
