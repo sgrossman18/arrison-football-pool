@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getCurrentWeek } from "@/lib/season";
+import { getSeasonWeeks, pickCurrentWeek } from "@/lib/season";
 
 // The weekly "bonus point" question: a one-off guess (currently boy or girl)
 // that earns every correct guesser +1 for that week once an admin reveals the
@@ -49,8 +49,36 @@ export async function getBonusWinners(weekIds: string[]): Promise<Map<string, st
   return winners;
 }
 
+// The week the Bonus Point page is about. Normally the newest week with the
+// question switched on that is the current week or later — so it can go live
+// ahead of the week rolling over (the "current" week only flips Tuesday evening)
+// and drops back to the Egg once that week has passed. An admin can preview any
+// week by number; otherwise a week that isn't switched on falls back to the
+// current one so the page has something to show.
+export async function getBonusWeek(previewWeekNumber?: number) {
+  const weeks = await getSeasonWeeks();
+  if (previewWeekNumber != null) {
+    const found = weeks.find((w) => w.weekNumber === previewWeekNumber);
+    if (found) return found;
+  }
+  const current = pickCurrentWeek(weeks);
+  const live = weeks.filter(
+    (w) => w.bonusEnabled && (!current || w.weekNumber >= current.weekNumber),
+  );
+  return live[live.length - 1] ?? current;
+}
+
 // Whether the nav should advertise "Bonus Point" instead of "Egg" right now.
 export async function isBonusLive(): Promise<boolean> {
-  const week = await getCurrentWeek();
+  const week = await getBonusWeek();
   return Boolean(week?.bonusEnabled);
+}
+
+// Hints are typed one per line, and often pasted with their own "Hints:"
+// heading and "1)" numbering; strip both since the page numbers them itself.
+export function parseHints(text: string | null): string[] {
+  return (text ?? "")
+    .split("\n")
+    .map((h) => h.trim().replace(/^(?:\d+\s*[.)]|[-•*])\s*/, ""))
+    .filter((h) => h && !/^hints?\s*:?$/i.test(h));
 }

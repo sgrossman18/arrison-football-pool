@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/require-admin";
 import { prisma } from "@/lib/db";
 import TeamSelect from "@/components/TeamSelect";
@@ -38,11 +38,14 @@ const BTN_OUTLINE_ACCENT =
 
 export default async function WeekEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ bonus?: string; msg?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
+  const { bonus: bonusStatus, msg: bonusMessage } = await searchParams;
 
   const week = await prisma.week.findUnique({
     where: { id },
@@ -98,12 +101,22 @@ export default async function WeekEditorPage({
       </div>
 
       {/* Bonus point */}
-      <section>
+      <section id="bonus">
         <h2 className="text-lg font-bold mb-3">Bonus point</h2>
+        {bonusStatus === "saved" && (
+          <div className="rounded-xl bg-accent-soft text-accent-strong px-4 py-2.5 text-sm font-semibold mb-3">
+            Saved ✓
+          </div>
+        )}
+        {bonusStatus === "error" && (
+          <div className="rounded-xl bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-4 py-2.5 text-sm font-semibold mb-3">
+            Couldn&apos;t save: {bonusMessage ?? "something went wrong."}
+          </div>
+        )}
         <p className="text-sm text-muted mb-3">
           A one-off boy-or-girl question. While it&apos;s off, players don&apos;t see it (the nav
           still says Egg); you can always{" "}
-          <a href="/bonus" className="text-accent-strong font-medium hover:underline">
+          <a href={`/bonus?week=${week.weekNumber}`} className="text-accent-strong font-medium hover:underline">
             preview the page
           </a>
           . Everyone who guesses the answer gets +1 on this week&apos;s score once you reveal it.
@@ -111,7 +124,7 @@ export default async function WeekEditorPage({
         <form
           action={async (formData: FormData) => {
             "use server";
-            await setBonusConfig(week.id, {
+            const result = await setBonusConfig(week.id, {
               enabled: formData.get("enabled") === "on",
               answer: String(formData.get("answer") ?? ""),
               heading: String(formData.get("heading") ?? ""),
@@ -119,6 +132,11 @@ export default async function WeekEditorPage({
               imageUrl: String(formData.get("imageUrl") ?? ""),
               hints: String(formData.get("hints") ?? ""),
             });
+            redirect(
+              result.ok
+                ? `/admin/weeks/${week.id}?bonus=saved#bonus`
+                : `/admin/weeks/${week.id}?bonus=error&msg=${encodeURIComponent(result.error ?? "")}#bonus`,
+            );
           }}
           className="flex items-center gap-3 flex-wrap"
         >

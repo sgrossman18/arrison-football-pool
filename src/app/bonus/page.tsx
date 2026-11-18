@@ -1,15 +1,22 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getCurrentWeek } from "@/lib/season";
-import { getBonusWinners, isBonusChoice } from "@/lib/bonus";
+import { getBonusWeek, getBonusWinners, isBonusChoice, parseHints } from "@/lib/bonus";
 import BonusView from "@/components/BonusView";
 
-export default async function BonusPage() {
+export default async function BonusPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
 
-  const week = await getCurrentWeek();
+  // Admins can preview a specific week with ?week=N (the admin card links here).
+  const requested = Number((await searchParams).week);
+  const week = await getBonusWeek(
+    session.user.isAdmin && Number.isInteger(requested) ? requested : undefined,
+  );
   const live = Boolean(week?.bonusEnabled);
   // Players only get here once it's turned on; admins can always open it to
   // preview.
@@ -64,10 +71,7 @@ export default async function BonusPage() {
       heading={week.bonusHeading}
       blurb={week.bonusBlurb}
       hasImage={Boolean(week.bonusImageUrl)}
-      hints={(week.bonusHints ?? "")
-        .split("\n")
-        .map((h) => h.trim())
-        .filter(Boolean)}
+      hints={parseHints(week.bonusHints)}
     />
   );
 }
