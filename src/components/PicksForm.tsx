@@ -36,6 +36,7 @@ export default function PicksForm({
   canSubmit,
   lockMessage,
   deadlinePhrase,
+  staged,
   submitAction,
 }: {
   games: PicksFormGame[];
@@ -43,6 +44,7 @@ export default function PicksForm({
   canSubmit: boolean;
   lockMessage?: string;
   deadlinePhrase: string;
+  staged: boolean; // games lock at different times this week
   submitAction: (
     picks: { gameId: string; pickedTeam: string; confidence: number }[],
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -57,7 +59,11 @@ export default function PicksForm({
   const [teamByGame, setTeamByGame] = useState<Record<string, string>>(initialTeamByGame);
   const [confByGame, setConfByGame] = useState<Record<string, number>>(initialConfByGame);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<{
+    saved: number;
+    remaining: number;
+    unfinished: string[];
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -67,13 +73,12 @@ export default function PicksForm({
   const lockedGames = games.filter((g) => g.locked);
   const n = games.length;
   // Numbers on locked games are spent, and so is the largest free number for
-  // every locked game that has no pick.
+  // every locked game that has no pick. Worked out from what's saved (not the
+  // unsaved selections on screen), the same way the server checks it.
   const { burned, spent: lockedConfidences } = spentConfidences(
     n,
     lockedGames.map((g) => g.id),
-    lockedGames
-      .filter((g) => confByGame[g.id])
-      .map((g) => ({ gameId: g.id, confidence: confByGame[g.id] })),
+    initialPicks,
   );
   const confidenceOptions = Array.from({ length: n }, (_, i) => i + 1);
   const usedConfidences = new Set(Object.values(confByGame));
@@ -99,7 +104,7 @@ export default function PicksForm({
   }
 
   function pickTeam(gameId: string, team: string) {
-    setSuccess(false);
+    setSuccess(null);
     const next = { ...teamByGame, [gameId]: team };
     setTeamByGame(next);
     maybePromptToSubmit(next, confByGame);
@@ -107,7 +112,7 @@ export default function PicksForm({
 
   function pickConfidence(gameId: string, value: number) {
     if (lockedConfidences.has(value)) return;
-    setSuccess(false);
+    setSuccess(null);
     const next = { ...confByGame };
     // Keep confidence values unique: whoever else had this value loses it.
     for (const [gid, v] of Object.entries(next)) {
@@ -125,26 +130,41 @@ export default function PicksForm({
 
   function save() {
     setError(null);
+    setSuccess(null);
 
-    const missingTeam = openGames.some((g) => !teamByGame[g.id]);
-    if (missingTeam) {
-      setError("Pick a winner for every open game.");
+    const matchup = (g: PicksFormGame) => `${g.awayTeam} @ ${g.homeTeam}`;
+    const ready = openGames.filter((g) => teamByGame[g.id] && confByGame[g.id]);
+    // Started but missing the winner or the number.
+    const unfinished = openGames.filter((g) => !!teamByGame[g.id] !== !!confByGame[g.id]);
+
+    // A previously saved pick can't be left half-done (its number was probably
+    // just moved to another game); the saved copy would still hold the old one.
+    const savedIds = new Set(initialPicks.map((p) => p.gameId));
+    const brokenSaved = unfinished.find((g) => savedIds.has(g.id));
+    if (brokenSaved) {
+      setShowConfirm(false);
+      setError(
+        `${matchup(brokenSaved)} needs a new confidence number before you can save (yours moved to another game).`,
+      );
       return;
     }
-    const confidences = openGames.map((g) => confByGame[g.id]);
-    if (confidences.some((c) => !c)) {
-      setError(`Set a confidence value (1-${n}) for every open game.`);
+    if (ready.length === 0) {
+      setShowConfirm(false);
+      setError(
+        unfinished.length > 0
+          ? "To save a pick, choose both a winner and a confidence number."
+          : "Pick a winner and a confidence number for at least one game.",
+      );
       return;
     }
-    const unique = new Set(confidences);
-    if (unique.size !== openGames.length) {
+    if (new Set(ready.map((g) => confByGame[g.id])).size !== ready.length) {
       setError("Each confidence value can only be used once.");
       return;
     }
 
     startTransition(async () => {
       const result = await submitAction(
-        openGames.map((g) => ({
+        ready.map((g) => ({
           gameId: g.id,
           pickedTeam: teamByGame[g.id],
           confidence: confByGame[g.id],
@@ -154,7 +174,11 @@ export default function PicksForm({
       if (!result.ok) {
         setError(result.error ?? "Something went wrong. Try again.");
       } else {
-        setSuccess(true);
+        setSuccess({
+          saved: ready.length,
+          remaining: openGames.length - ready.length,
+          unfinished: unfinished.map(matchup),
+        });
       }
     });
   }
@@ -178,6 +202,13 @@ export default function PicksForm({
           already locked, so your largest free {burned.length === 1 ? "number" : "numbers"} (
           {burned.join(", ")}) {burned.length === 1 ? "is" : "are"} used up.
         </div>
+      )}
+
+      {canSubmit && (
+        <p className="text-xs text-muted">
+          A dimmed number is already on another game — tap it to move it. You can save one game
+          at a time.
+        </p>
       )}
 
       {games.map((game) => {
@@ -252,7 +283,9 @@ export default function PicksForm({
 
             <div className="flex items-center gap-2 sm:justify-end">
               <span className="text-xs text-muted font-medium mr-1">Confidence</span>
-              <div className="flex gap-1">
+              {/* Weeks with more than 5 games wrap into rows of five so the
+                  numbers never run off the card. */}
+              <div className={n > 5 ? "grid grid-cols-5 gap-1.5" : "flex gap-1"}>
                 {confidenceOptions.map((v) => {
                   const isSelected = confidence === v;
                   const isTakenElsewhere = usedConfidences.has(v) && !isSelected;
@@ -285,8 +318,33 @@ export default function PicksForm({
 
       {error && <div className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</div>}
       {success && (
-        <div className="text-sm text-accent-strong font-medium">
-          Picks saved! Feel free to change them again before the deadline.
+        <div
+          role="status"
+          className="rounded-xl border border-accent bg-accent-soft px-4 py-3 text-sm"
+        >
+          {success.remaining === 0 ? (
+            <p className="font-semibold text-accent-strong">
+              ✓ Picks saved! Feel free to change them again before the deadline.
+            </p>
+          ) : (
+            <>
+              <p className="font-semibold text-accent-strong">
+                ✓ Saved! {success.saved === 1 ? "Your pick is" : `Your ${success.saved} picks are`} in.
+              </p>
+              <p className="mt-1">
+                Don&apos;t forget to come back and pick the other{" "}
+                {success.remaining === 1 ? "game" : `${success.remaining} games`} before{" "}
+                {deadlinePhrase}.
+                {staged && " A game that locks without a pick uses up your largest free number."}
+              </p>
+              {success.unfinished.length > 0 && (
+                <p className="mt-1 font-medium">
+                  Not saved yet (needs both a winner and a number):{" "}
+                  {success.unfinished.join(", ")}.
+                </p>
+              )}
+            </>
+          )}
         </div>
       )}
 
