@@ -35,13 +35,18 @@ export async function savePicks({
   const editableGameIds = new Set(editable.map((g) => g.id));
 
   // Picks on games that already locked stay as they were, and the confidence
-  // numbers they used can't be reused on games that are still open.
+  // numbers they used can't be reused on games that are still open. A save can
+  // cover just some of the open games.
   const existing = await prisma.pick.findMany({
     where: { playerId, gameId: { in: week.games.map((g) => g.id) } },
   });
-  const lockedPicks = existing.filter((p) => !editableGameIds.has(p.gameId));
 
-  const check = validatePickSubmission({ games: week.games, editableGameIds, lockedPicks, picks });
+  const check = validatePickSubmission({
+    games: week.games,
+    editableGameIds,
+    savedPicks: existing,
+    picks,
+  });
   if (!check.ok) return { ok: false, error: check.error };
 
   await prisma.$transaction(

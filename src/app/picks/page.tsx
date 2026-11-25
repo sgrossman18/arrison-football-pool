@@ -143,7 +143,10 @@ export default async function PicksPage({
       )}
 
       <PicksForm
-        key={activePlayer.id}
+        // Remount when the week or player changes, so one week's selections
+        // never carry into another (they'd grey out its confidence numbers).
+        key={`${week.id}:${activePlayer.id}`}
+        staged={staged}
         games={gameStates.map(({ game: g, lockTime, locked }) => ({
           id: g.id,
           homeTeam: g.homeTeam,
