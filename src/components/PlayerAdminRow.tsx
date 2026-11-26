@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { renamePlayer, deletePlayer } from "@/app/admin/actions";
+import ConfirmPrompt from "@/components/ConfirmPrompt";
 
 export default function PlayerAdminRow({
   player,
@@ -11,6 +12,7 @@ export default function PlayerAdminRow({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(player.name);
   const [removed, setRemoved] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -63,6 +65,23 @@ export default function PlayerAdminRow({
     );
   }
 
+  if (confirming) {
+    return (
+      <ConfirmPrompt
+        message={`Remove "${player.name}"? This deletes all of their picks for the whole season and can't be undone.`}
+        confirmLabel={`Yes, remove ${player.name}`}
+        onConfirm={() => {
+          setConfirming(false);
+          startTransition(async () => {
+            await deletePlayer(player.id);
+            setRemoved(true);
+          });
+        }}
+        onCancel={() => setConfirming(false)}
+      />
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 pl-3 pr-1.5 py-1 text-xs font-medium">
       {player.name}
@@ -77,19 +96,7 @@ export default function PlayerAdminRow({
       <button
         type="button"
         disabled={isPending}
-        onClick={() => {
-          if (
-            !confirm(
-              `Remove "${player.name}"? This deletes all of their picks for the whole season and can't be undone.`,
-            )
-          ) {
-            return;
-          }
-          startTransition(async () => {
-            await deletePlayer(player.id);
-            setRemoved(true);
-          });
-        }}
+        onClick={() => setConfirming(true)}
         className="text-muted hover:text-red-600 px-1 disabled:opacity-50"
         title="Remove"
       >
