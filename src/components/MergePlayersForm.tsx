@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { mergePlayers } from "@/app/admin/actions";
+import ConfirmPrompt from "@/components/ConfirmPrompt";
 
 export type MergeCandidate = { id: string; label: string };
 
@@ -10,7 +12,11 @@ export default function MergePlayersForm({ players }: { players: MergeCandidate[
   const [targetId, setTargetId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const sourceLabel = players.find((p) => p.id === sourceId)?.label ?? "this profile";
+  const targetLabel = players.find((p) => p.id === targetId)?.label ?? "the other profile";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,31 +31,31 @@ export default function MergePlayersForm({ players }: { players: MergeCandidate[
       setError("Pick two different picker profiles.");
       return;
     }
-    const sourceLabel = players.find((p) => p.id === sourceId)?.label ?? "this profile";
-    const targetLabel = players.find((p) => p.id === targetId)?.label ?? "the other profile";
-    if (
-      !confirm(
-        `Move all of ${sourceLabel}'s picks into ${targetLabel}, then delete ${sourceLabel}? This can't be undone.`,
-      )
-    ) {
-      return;
-    }
+    setConfirming(true);
+  }
 
+  function merge() {
+    setConfirming(false);
     startTransition(async () => {
-      const result = await mergePlayers(sourceId, targetId);
-      if (!result.ok) {
-        setError(result.error ?? "Couldn't merge.");
-        return;
+      try {
+        const result = await mergePlayers(sourceId, targetId);
+        if (!result.ok) {
+          setError(result.error ?? "Couldn't merge.");
+          return;
+        }
+        setMessage(
+          `Moved ${result.movedPicks} pick${result.movedPicks === 1 ? "" : "s"}` +
+            (result.skippedPicks
+              ? ` (${result.skippedPicks} duplicate pick${result.skippedPicks === 1 ? "" : "s"} for the same game kept from the account you're keeping).`
+              : ".") +
+            ` "${sourceLabel}" has been removed.`,
+        );
+        setSourceId("");
+        setTargetId("");
+      } catch (e) {
+        unstable_rethrow(e);
+        setError("Couldn't merge — reload the page and try again.");
       }
-      setMessage(
-        `Moved ${result.movedPicks} pick${result.movedPicks === 1 ? "" : "s"}` +
-          (result.skippedPicks
-            ? ` (${result.skippedPicks} duplicate pick${result.skippedPicks === 1 ? "" : "s"} for the same game kept from the account you're keeping).`
-            : ".") +
-          ` "${sourceLabel}" has been removed.`,
-      );
-      setSourceId("");
-      setTargetId("");
     });
   }
 
@@ -58,8 +64,11 @@ export default function MergePlayersForm({ players }: { players: MergeCandidate[
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={sourceId}
-          onChange={(e) => setSourceId(e.target.value)}
-          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+          onChange={(e) => {
+            setSourceId(e.target.value);
+            setConfirming(false);
+          }}
+          className="max-w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
         >
           <option value="">Duplicate to remove...</option>
           {players.map((p) => (
@@ -71,8 +80,11 @@ export default function MergePlayersForm({ players }: { players: MergeCandidate[
         <span className="text-sm text-muted">merges into</span>
         <select
           value={targetId}
-          onChange={(e) => setTargetId(e.target.value)}
-          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+          onChange={(e) => {
+            setTargetId(e.target.value);
+            setConfirming(false);
+          }}
+          className="max-w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
         >
           <option value="">Account to keep...</option>
           {players.map((p) => (
@@ -83,12 +95,20 @@ export default function MergePlayersForm({ players }: { players: MergeCandidate[
         </select>
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || confirming}
           className="rounded-lg border-2 border-accent text-accent px-3.5 py-1.5 text-sm font-semibold hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
         >
           {isPending ? "Merging…" : "Merge"}
         </button>
       </div>
+      {confirming && (
+        <ConfirmPrompt
+          message={`Move all of ${sourceLabel}'s picks into ${targetLabel}, then delete ${sourceLabel}? This can't be undone.`}
+          confirmLabel="Yes, merge"
+          onConfirm={merge}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
       {message && <p className="text-xs text-accent-strong font-medium">{message}</p>}
     </form>
