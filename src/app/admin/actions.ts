@@ -16,6 +16,7 @@ import {
 import { effectiveLockTime } from "@/lib/locking";
 import { computeGameLocks } from "@/lib/lock-schedule";
 import { isBonusChoice } from "@/lib/bonus";
+import { findNumberClashes } from "@/lib/merge-check";
 
 export async function createNextWeek() {
   await requireAdmin();
@@ -204,24 +205,26 @@ export async function createPlayerForUser(userId: string, name: string) {
 // standings. If both players happened to pick the same game (e.g. they
 // used both logins in the same week), the target's existing pick is kept
 // and the source's conflicting one is dropped rather than silently
-// overwriting real data either direction.
+// overwriting real data either direction. If combining them would put one
+// confidence number on two games in a week, nothing is merged.
 export async function mergePlayers(sourcePlayerId: string, targetPlayerId: string) {
   await requireAdmin();
   if (sourcePlayerId === targetPlayerId) {
     return { ok: false, error: "Can't merge a player into itself." };
   }
 
+  const withWeek = { game: { include: { week: { select: { weekNumber: true } } } } };
   const [source, target] = await Promise.all([
     prisma.player.findUnique({
       where: { id: sourcePlayerId },
-      include: { picks: true, lockOverrides: true },
+      include: { picks: { include: withWeek }, lockOverrides: true },
     }),
     prisma.player.findUnique({ where: { id: targetPlayerId } }),
   ]);
   if (!source || !target) return { ok: false, error: "Player not found." };
 
   const [targetPicks, targetOverrides, targetGuesses, sourceGuesses] = await Promise.all([
-    prisma.pick.findMany({ where: { playerId: targetPlayerId }, select: { gameId: true } }),
+    prisma.pick.findMany({ where: { playerId: targetPlayerId }, include: withWeek }),
     prisma.lockOverride.findMany({ where: { playerId: targetPlayerId }, select: { weekId: true } }),
     prisma.bonusGuess.findMany({ where: { playerId: targetPlayerId }, select: { weekId: true } }),
     prisma.bonusGuess.findMany({ where: { playerId: sourcePlayerId } }),
@@ -234,6 +237,14 @@ export async function mergePlayers(sourcePlayerId: string, targetPlayerId: strin
   const picksToMove = source.picks.filter((p) => !targetGameIds.has(p.gameId));
   const overridesToMove = source.lockOverrides.filter((o) => !targetWeekIds.has(o.weekId));
   const skippedPicks = source.picks.length - picksToMove.length;
+
+  const clashes = findNumberClashes(picksToMove, targetPicks);
+  if (clashes.length > 0) {
+    return {
+      ok: false,
+      error: `Nothing was merged — the combined picks would use a number twice in one week. ${clashes.join("; ")}. Change one pick in each pair to a different number, then merge again. If its game has locked, give that profile a lock override on the week's admin page first, and remove it afterward.`,
+    };
+  }
 
   await prisma.$transaction([
     ...picksToMove.map((p) =>
